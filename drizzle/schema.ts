@@ -20,7 +20,6 @@ export const users = mysqlTable("users", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
-
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
@@ -38,7 +37,6 @@ export const subscriptions = mysqlTable("subscriptions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
 
@@ -54,16 +52,16 @@ export const transactions = mysqlTable("transactions", {
   amountCents: int("amountCents").notNull(),
   currency: varchar("currency", { length: 8 }).default("usd").notNull(),
   status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"]).default("pending").notNull(),
-  wagerSelected: int("wagerSelected").default(0).notNull(),
+  /** Whether the user has already selected their incentive condition for this transaction */
+  incentiveSelected: int("incentiveSelected").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = typeof transactions.$inferInsert;
 
-/** Wager bets placed by users after successful payment. */
-export const wagers = mysqlTable("wagers", {
+/** Incentive conditions selected by members after successful payment. */
+export const incentives = mysqlTable("incentives", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   transactionId: int("transactionId").notNull(),
@@ -74,13 +72,13 @@ export const wagers = mysqlTable("wagers", {
   conditionDetail: text("conditionDetail"),
   rewardDescription: varchar("rewardDescription", { length: 256 }).notNull(),
   rewardValueCents: int("rewardValueCents").notNull(),
-  status: mysqlEnum("status", ["pending", "won", "lost", "expired", "cancelled"]).default("pending").notNull(),
+  /** Outcome status: pending = tracking, achieved = reward earned, not_achieved = condition not met */
+  status: mysqlEnum("status", ["pending", "achieved", "not_achieved", "expired", "cancelled"]).default("pending").notNull(),
   resolvedAt: timestamp("resolvedAt"),
   expiresAt: timestamp("expiresAt"),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
-export type Wager = typeof wagers.$inferSelect;
-export type InsertWager = typeof wagers.$inferInsert;
+export type Incentive = typeof incentives.$inferSelect;
+export type InsertIncentive = typeof incentives.$inferInsert;

@@ -38,4 +38,22 @@
 - [x] Loading/error/empty states on all pages
 - [x] TypeScript clean (0 errors)
 - [x] Fix Stripe price ID mismatch (re-seeded prices under correct app key)
-- [ ] Save checkpoint
+- [x] Save checkpoint
+
+## Phase 6: Compliance Rename (Wager → Incentiv)
+- [x] Audit all files for wager/bet/gambling terminology
+- [x] Rename DB schema: wagers table → incentives, wager columns → incentive columns
+- [x] Push DB migration for renamed table/columns
+- [x] Rename server/wagerConditions.ts → server/incentiveConditions.ts
+- [x] Update server/db.ts: all wager references → incentive
+- [x] Update server/routers.ts: wager router → incentiv router, all copy compliant
+- [x] Update server/webhook.ts: wager references → incentive
+- [x] Rename client/src/pages/WagerSelect.tsx → IncentivSelect.tsx
+- [x] Rewrite Home.tsx: no wager/bet language
+- [x] Rewrite Plans.tsx: no wager/bet language
+- [x] Rewrite IncentivSelect.tsx: no wager/bet language
+- [x] Rewrite Dashboard.tsx: no wager/bet language
+- [x] Update App.tsx routes: /wager-select → /incentiv-select
+- [x] Update tests for renamed procedures
+- [x] TypeScript clean, all tests pass
+- [x] Save checkpoint

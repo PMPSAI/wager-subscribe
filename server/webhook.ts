@@ -16,7 +16,6 @@ export function registerStripeWebhook(app: Express) {
   app.post("/api/stripe/webhook", async (req: Request, res: Response) => {
     const sig = req.headers["stripe-signature"] as string;
     let event: Stripe.Event;
-
     try {
       event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
     } catch (err: unknown) {
@@ -44,24 +43,22 @@ export function registerStripeWebhook(app: Express) {
           const customerId = session.customer as string;
           const subscriptionId = session.subscription as string;
 
-          // Update transaction to completed
+          // Mark transaction as completed
           await updateTransactionStatus(sessionId, "completed", {
-            stripePaymentIntentId: session.payment_intent as string ?? undefined,
+            stripePaymentIntentId: (session.payment_intent as string) ?? undefined,
             stripeSubscriptionId: subscriptionId ?? undefined,
           });
 
-          // Update user's stripe customer ID
+          // Update user's Stripe customer ID
           if (userId && customerId) {
             await updateUserStripeCustomerId(userId, customerId);
           }
 
-          // Retrieve subscription details
+          // Create subscription record
           if (subscriptionId) {
             const sub = await stripe.subscriptions.retrieve(subscriptionId);
             const priceId = sub.items.data[0]?.price.id ?? "";
             const currentPeriodEnd = sub.items.data[0]?.current_period_end ?? 0;
-
-            // Check if subscription already exists
             const existing = await getSubscriptionByStripeId(subscriptionId);
             if (!existing && userId) {
               await createSubscription({

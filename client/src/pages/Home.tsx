@@ -3,14 +3,7 @@ import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Zap,
-  ArrowRight,
-  CheckCircle2,
-  Trophy,
-  TrendingUp,
-  BarChart3,
-  Shield,
-  RefreshCw,
+  Zap, ArrowRight, CheckCircle2, Trophy, TrendingUp, BarChart3, Shield, RefreshCw,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -18,25 +11,25 @@ const STEPS = [
   {
     number: "01",
     title: "Choose a Plan",
-    description: "Pick Starter, Pro, or Elite — each comes with a wager incentive worth far more than your subscription.",
+    description: "Pick Starter, Pro, or Elite — each comes with a performance incentive worth far more than your subscription fee.",
     icon: <Zap size={20} className="text-primary" />,
   },
   {
     number: "02",
-    title: "Pay via Stripe",
-    description: "Secure checkout powered by Stripe. Your payment is processed instantly and your subscription activates immediately.",
+    title: "Complete Payment",
+    description: "Secure checkout powered by Stripe. Your subscription activates immediately upon payment confirmation.",
     icon: <Shield size={20} className="text-primary" />,
   },
   {
     number: "03",
-    title: "Select Your Wager",
-    description: "Choose a real-world condition from Market, Sports, or Economy categories. If it happens in 30 days, you win.",
+    title: "Select Your Condition",
+    description: "Choose a real-world market, sports, or economic condition. If it occurs within 30 days, you earn your reward.",
     icon: <TrendingUp size={20} className="text-primary" />,
   },
   {
     number: "04",
-    title: "Track & Win",
-    description: "Your dashboard tracks every wager tied to your transaction ID. Come back anytime to check results.",
+    title: "Track & Earn",
+    description: "Your dashboard tracks every incentive tied to your transaction ID. Return anytime to check outcomes.",
     icon: <Trophy size={20} className="text-primary" />,
   },
 ];
@@ -45,7 +38,7 @@ const FEATURES = [
   { icon: <TrendingUp size={18} className="text-blue-500" />, label: "Market Conditions", desc: "Bitcoin, S&P 500, Gold, and more" },
   { icon: <Trophy size={18} className="text-yellow-500" />, label: "Sports Outcomes", desc: "NBA, NFL, and major tournaments" },
   { icon: <BarChart3 size={18} className="text-green-500" />, label: "Economic Events", desc: "Fed rates, inflation, oil prices" },
-  { icon: <RefreshCw size={18} className="text-purple-500" />, label: "Custom Wagers", desc: "Elite plan: define your own condition" },
+  { icon: <RefreshCw size={18} className="text-purple-500" />, label: "Custom Conditions", desc: "Elite plan: define your own condition" },
 ];
 
 export default function Home() {
@@ -66,9 +59,7 @@ export default function Home() {
             </span>
           </div>
           <nav className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/plans")}>
-              Plans
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/plans")}>Plans</Button>
             {isAuthenticated ? (
               <Button size="sm" onClick={() => navigate("/dashboard")} className="gap-1.5">
                 Dashboard <ArrowRight size={14} />
@@ -88,17 +79,17 @@ export default function Home() {
         <div className="container max-w-5xl mx-auto py-24 px-4 text-center relative">
           <Badge variant="outline" className="mb-6 bg-primary/5 text-primary border-primary/20 px-4 py-1.5 text-sm font-semibold">
             <Zap size={12} className="mr-1.5" fill="currentColor" />
-            Subscription + Wager Platform
+            Subscription + Performance Incentive Platform
           </Badge>
           <h1 className="text-5xl md:text-6xl font-extrabold text-foreground mb-6 leading-tight tracking-tight">
             Subscribe to a Plan.
             <br />
-            <span className="text-primary">Bet on the World.</span>
+            <span className="text-primary">Track a Condition.</span>
             <br />
-            Win Your Bill Back.
+            Earn Your Reward.
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            Every WagerSubscribe plan includes a real-money incentive. Pick a condition — Bitcoin hitting $100k, your team winning the championship, or a Fed rate cut — and if it happens in 30 days, your subscription is free.
+            Every WagerSubscribe plan includes a performance incentive. Select a real-world condition — Bitcoin reaching $100k, a Fed rate cut, or a championship upset — and if it occurs within 30 days, your subscription fee is refunded as a reward.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button size="lg" className="gap-2 px-8 text-base font-bold" onClick={() => navigate("/plans")}>
@@ -122,7 +113,7 @@ export default function Home() {
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-foreground mb-3">How It Works</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Four simple steps from subscription to winning your bill back.
+              Four steps from subscription to earning your performance reward.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -140,21 +131,21 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Wager categories */}
+      {/* Condition categories */}
       <section className="py-20">
         <div className="container max-w-5xl mx-auto px-4">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-3xl font-bold text-foreground mb-4">Real Conditions. Real Rewards.</h2>
               <p className="text-muted-foreground mb-6 leading-relaxed">
-                Wager conditions are drawn from live market data, sports outcomes, and economic events. Every wager is tracked against your transaction ID and user account — accessible anytime from your dashboard.
+                Incentive conditions are drawn from live market data, sports outcomes, and economic events. Every incentive is tracked against your transaction ID and member account — accessible anytime from your personal dashboard.
               </p>
               <ul className="space-y-3">
                 {[
-                  "Wagers tied to your Stripe transaction ID",
-                  "Persistent dashboard — check results anytime",
+                  "Incentives tied to your Stripe transaction ID",
+                  "Persistent dashboard — check outcomes anytime",
                   "30-day tracking window per subscription cycle",
-                  "Automatic reward application on win",
+                  "Automatic reward credit on condition achievement",
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-2.5 text-sm text-foreground">
                     <CheckCircle2 size={16} className="text-primary shrink-0" />
@@ -184,16 +175,11 @@ export default function Home() {
       {/* CTA */}
       <section className="border-t border-border bg-primary py-16">
         <div className="container max-w-3xl mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-primary-foreground mb-4">Ready to place your first wager?</h2>
+          <h2 className="text-3xl font-bold text-primary-foreground mb-4">Ready to activate your first incentive?</h2>
           <p className="text-primary-foreground/80 mb-8 text-lg">
-            Subscribe today and choose your winning condition. The next 30 days could be on us.
+            Subscribe today and select your performance condition. The next 30 days could earn your subscription back.
           </p>
-          <Button
-            size="lg"
-            variant="secondary"
-            className="gap-2 px-10 text-base font-bold"
-            onClick={() => navigate("/plans")}
-          >
+          <Button size="lg" variant="secondary" className="gap-2 px-10 text-base font-bold" onClick={() => navigate("/plans")}>
             View All Plans <ArrowRight size={18} />
           </Button>
         </div>

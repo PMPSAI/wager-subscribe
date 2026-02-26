@@ -6,16 +6,18 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Plans from "./pages/Plans";
-import WagerSelect from "./pages/WagerSelect";
+import IncentivSelect from "./pages/WagerSelect";
 import Dashboard from "./pages/Dashboard";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/plans" component={Plans} />
-      <Route path="/wager-select" component={WagerSelect} />
+      {/* Legacy route kept for backward compatibility */}
+      <Route path="/wager-select" component={IncentivSelect} />
+      {/* Primary post-checkout route */}
+      <Route path="/incentiv-select" component={IncentivSelect} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
@@ -23,18 +25,10 @@ function Router() {
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />

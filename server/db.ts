@@ -4,11 +4,11 @@ import {
   InsertUser,
   InsertSubscription,
   InsertTransaction,
-  InsertWager,
+  InsertIncentive,
   subscriptions,
   transactions,
   users,
-  wagers,
+  incentives,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -148,10 +148,10 @@ export async function updateTransactionStatus(
     .where(eq(transactions.stripeSessionId, stripeSessionId));
 }
 
-export async function markTransactionWagerSelected(transactionId: number) {
+export async function markTransactionIncentiveSelected(transactionId: number) {
   const db = await getDb();
   if (!db) return;
-  await db.update(transactions).set({ wagerSelected: 1 }).where(eq(transactions.id, transactionId));
+  await db.update(transactions).set({ incentiveSelected: 1 }).where(eq(transactions.id, transactionId));
 }
 
 export async function getTransactionsByUserId(userId: number) {
@@ -164,50 +164,50 @@ export async function getTransactionsByUserId(userId: number) {
     .orderBy(desc(transactions.createdAt));
 }
 
-// ─── Wagers ───────────────────────────────────────────────────────────────────
+// ─── Incentives ───────────────────────────────────────────────────────────────
 
-export async function createWager(data: InsertWager) {
+export async function createIncentive(data: InsertIncentive) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(wagers).values(data);
+  await db.insert(incentives).values(data);
 }
 
-export async function getWagersByUserId(userId: number) {
+export async function getIncentivesByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db
     .select()
-    .from(wagers)
-    .where(eq(wagers.userId, userId))
-    .orderBy(desc(wagers.createdAt));
+    .from(incentives)
+    .where(eq(incentives.userId, userId))
+    .orderBy(desc(incentives.createdAt));
 }
 
-export async function getWagerByTransactionId(transactionId: number) {
+export async function getIncentiveByTransactionId(transactionId: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
-    .from(wagers)
-    .where(eq(wagers.transactionId, transactionId))
+    .from(incentives)
+    .where(eq(incentives.transactionId, transactionId))
     .limit(1);
   return result[0];
 }
 
-export async function updateWagerStatus(
-  wagerId: number,
-  status: "pending" | "won" | "lost" | "expired" | "cancelled",
+export async function updateIncentiveStatus(
+  incentiveId: number,
+  status: "pending" | "achieved" | "not_achieved" | "expired" | "cancelled",
   notes?: string
 ) {
   const db = await getDb();
   if (!db) return;
   await db
-    .update(wagers)
+    .update(incentives)
     .set({ status, resolvedAt: status !== "pending" ? new Date() : undefined, notes })
-    .where(eq(wagers.id, wagerId));
+    .where(eq(incentives.id, incentiveId));
 }
 
-export async function getAllWagers() {
+export async function getAllIncentives() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(wagers).orderBy(desc(wagers.createdAt));
+  return db.select().from(incentives).orderBy(desc(incentives.createdAt));
 }
