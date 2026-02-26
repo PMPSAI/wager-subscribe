@@ -18,7 +18,7 @@ export const PLANS: Plan[] = [
   {
     tier: "starter",
     name: "Starter",
-    priceId: "price_1T4wAfGjKwM0S061lXYlA95j",
+    priceId: "price_1T4wMlLBX2wmK6Zv4ykAuqm1",
     amountCents: 900,
     currency: "usd",
     features: [
@@ -35,7 +35,7 @@ export const PLANS: Plan[] = [
   {
     tier: "pro",
     name: "Pro",
-    priceId: "price_1T4wAVGjKwM0S061XFmPMHG8",
+    priceId: "price_1T4wMmLBX2wmK6ZvBZ1eGDsl",
     amountCents: 2900,
     currency: "usd",
     features: [
@@ -54,7 +54,7 @@ export const PLANS: Plan[] = [
   {
     tier: "elite",
     name: "Elite",
-    priceId: "price_1T4wAaGjKwM0S061T2Wgx44D",
+    priceId: "price_1T4wMnLBX2wmK6Zv83jUUYcl",
     amountCents: 7900,
     currency: "usd",
     features: [

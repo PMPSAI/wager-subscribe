@@ -37,4 +37,5 @@
 - [x] Responsive design across all pages
 - [x] Loading/error/empty states on all pages
 - [x] TypeScript clean (0 errors)
+- [x] Fix Stripe price ID mismatch (re-seeded prices under correct app key)
 - [ ] Save checkpoint
