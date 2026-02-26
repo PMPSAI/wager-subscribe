@@ -15,6 +15,13 @@
       "when": 1772080095387,
       "tag": "0001_broken_hawkeye",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1772138542712,
+      "tag": "0002_moaning_shriek",
+      "breakpoints": true
     }
   ]
 }
