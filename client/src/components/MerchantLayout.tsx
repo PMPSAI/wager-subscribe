@@ -43,17 +43,19 @@ export default function MerchantLayout({ children }: { children: React.ReactNode
           {navItems.map((item) => {
             const active = location === item.href || (item.href !== "/merchant" && location.startsWith(item.href));
             return (
-              <Link key={item.href} href={item.href}>
-                <a className={cn(
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
                   active
                     ? "bg-emerald-50 text-emerald-700"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                )}>
-                  <item.icon className={cn("w-4 h-4", active ? "text-emerald-600" : "text-gray-400")} />
-                  {item.label}
-                  {active && <ChevronRight className="w-3 h-3 ml-auto text-emerald-400" />}
-                </a>
+                )}
+              >
+                <item.icon className={cn("w-4 h-4", active ? "text-emerald-600" : "text-gray-400")} />
+                {item.label}
+                {active && <ChevronRight className="w-3 h-3 ml-auto text-emerald-400" />}
               </Link>
             );
           })}
