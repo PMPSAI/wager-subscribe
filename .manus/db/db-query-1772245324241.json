@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE incentives MODIFY COLUMN status ENUM('pending','won','lost','achieved','not_achieved','expired','cancelled') NOT NULL DEFAULT 'pending';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PzbEFZt8sEH6G4m.47a99107f879 --database Cmm5HA74HwRBhaJrKXZMGz --execute ALTER TABLE incentives MODIFY COLUMN status ENUM('pending','won','lost','achieved','not_achieved','expired','cancelled') NOT NULL DEFAULT 'pending';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 874
+}

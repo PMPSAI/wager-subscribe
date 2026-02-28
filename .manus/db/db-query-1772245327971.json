@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE incentives SET status = 'achieved' WHERE status = 'won';\nUPDATE incentives SET status = 'not_achieved' WHERE status = 'lost';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PzbEFZt8sEH6G4m.47a99107f879 --database Cmm5HA74HwRBhaJrKXZMGz --execute UPDATE incentives SET status = 'achieved' WHERE status = 'won';\nUPDATE incentives SET status = 'not_achieved' WHERE status = 'lost';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 411
+}

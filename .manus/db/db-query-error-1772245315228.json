@@ -1,0 +1,8 @@
+{
+  "query": "ALTER TABLE incentives MODIFY COLUMN status ENUM('pending','achieved','not_achieved','expired','cancelled') NOT NULL DEFAULT 'pending';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user PzbEFZt8sEH6G4m.47a99107f879 --database Cmm5HA74HwRBhaJrKXZMGz --execute ALTER TABLE incentives MODIFY COLUMN status ENUM('pending','achieved','not_achieved','expired','cancelled') NOT NULL DEFAULT 'pending';",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1265 (01000) at line 1: Data truncated for column 'status', value is 'won'"
+  ]
+}
