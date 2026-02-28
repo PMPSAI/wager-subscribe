@@ -1,14 +1,32 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
-  InsertUser,
+  Campaign,
+  Incentive,
+  InsertCampaign,
+  InsertIncentive,
+  InsertIncentiveOption,
+  InsertIntent,
+  InsertLedger,
+  InsertResolution,
+  InsertResolverRun,
+  InsertSettlement,
   InsertSubscription,
   InsertTransaction,
-  InsertIncentive,
+  InsertUser,
+  Intent,
+  campaigns,
+  incentiveOptions,
+  incentives,
+  intents,
+  ledger,
+  resolutions,
+  resolverRuns,
+  rewardBalances,
+  settlements,
   subscriptions,
   transactions,
   users,
-  incentives,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -16,12 +34,8 @@ let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+    try { _db = drizzle(process.env.DATABASE_URL); }
+    catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; }
   }
   return _db;
 }
@@ -32,10 +46,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
   if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
-
   const values: InsertUser = { openId: user.openId };
   const updateSet: Record<string, unknown> = {};
-
   const textFields = ["name", "email", "loginMethod"] as const;
   type TextField = (typeof textFields)[number];
   const assignNullable = (field: TextField) => {
@@ -46,13 +58,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     updateSet[field] = normalized;
   };
   textFields.forEach(assignNullable);
-
   if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
   if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
   else if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; }
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
-
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
@@ -71,6 +81,14 @@ export async function updateUserStripeCustomerId(userId: number, stripeCustomerI
 
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 
+export async function upsertSubscription(sub: InsertSubscription) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(subscriptions).values(sub).onDuplicateKeyUpdate({
+    set: { status: sub.status, currentPeriodEnd: sub.currentPeriodEnd, updatedAt: new Date() },
+  });
+}
+
 export async function createSubscription(data: InsertSubscription) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -80,23 +98,17 @@ export async function createSubscription(data: InsertSubscription) {
 export async function getActiveSubscriptionByUserId(userId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(subscriptions)
+  const result = await db.select().from(subscriptions)
     .where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, "active")))
-    .orderBy(desc(subscriptions.createdAt))
-    .limit(1);
+    .orderBy(desc(subscriptions.createdAt)).limit(1);
   return result[0];
 }
 
 export async function getSubscriptionByStripeId(stripeSubscriptionId: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(subscriptions)
-    .where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId))
-    .limit(1);
+  const result = await db.select().from(subscriptions)
+    .where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId)).limit(1);
   return result[0];
 }
 
@@ -120,11 +132,8 @@ export async function createTransaction(data: InsertTransaction) {
 export async function getTransactionBySessionId(stripeSessionId: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.stripeSessionId, stripeSessionId))
-    .limit(1);
+  const result = await db.select().from(transactions)
+    .where(eq(transactions.stripeSessionId, stripeSessionId)).limit(1);
   return result[0];
 }
 
@@ -142,10 +151,7 @@ export async function updateTransactionStatus(
 ) {
   const db = await getDb();
   if (!db) return;
-  await db
-    .update(transactions)
-    .set({ status, ...extra })
-    .where(eq(transactions.stripeSessionId, stripeSessionId));
+  await db.update(transactions).set({ status, ...extra }).where(eq(transactions.stripeSessionId, stripeSessionId));
 }
 
 export async function markTransactionIncentiveSelected(transactionId: number) {
@@ -157,14 +163,209 @@ export async function markTransactionIncentiveSelected(transactionId: number) {
 export async function getTransactionsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.userId, userId))
-    .orderBy(desc(transactions.createdAt));
+  return db.select().from(transactions).where(eq(transactions.userId, userId)).orderBy(desc(transactions.createdAt));
 }
 
-// ─── Incentives ───────────────────────────────────────────────────────────────
+// ─── Campaigns ────────────────────────────────────────────────────────────────
+
+export async function getAllCampaigns() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaigns).orderBy(desc(campaigns.createdAt));
+}
+
+export async function getCampaignById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(campaigns).where(eq(campaigns.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createCampaign(data: InsertCampaign) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(campaigns).values(data);
+}
+
+export async function updateCampaign(id: number, data: Partial<Campaign>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(campaigns).set({ ...data, updatedAt: new Date() }).where(eq(campaigns.id, id));
+}
+
+// ─── Incentive Options ────────────────────────────────────────────────────────
+
+export async function getOptionsByCampaign(campaignId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(incentiveOptions).where(eq(incentiveOptions.campaignId, campaignId));
+}
+
+export async function getAllOptions() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(incentiveOptions).orderBy(desc(incentiveOptions.createdAt));
+}
+
+export async function createIncentiveOption(data: InsertIncentiveOption) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(incentiveOptions).values(data);
+}
+
+export async function getOptionById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(incentiveOptions).where(eq(incentiveOptions.id, id)).limit(1);
+  return result[0];
+}
+
+// ─── Intents ──────────────────────────────────────────────────────────────────
+
+export async function createIntent(data: InsertIntent) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(intents).values(data);
+}
+
+export async function getUserIntents(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(intents).where(eq(intents.userId, userId)).orderBy(desc(intents.createdAt));
+}
+
+export async function getAllIntents(limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(intents).orderBy(desc(intents.createdAt)).limit(limit);
+}
+
+export async function getIntentById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(intents).where(eq(intents.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateIntentStatus(id: number, status: Intent["status"]) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(intents).set({ status, updatedAt: new Date() }).where(eq(intents.id, id));
+}
+
+export async function getIntentsDueForResolution() {
+  const db = await getDb();
+  if (!db) return [];
+  const now = new Date();
+  return db.select().from(intents).where(and(eq(intents.status, "TRACKING"), lt(intents.resolveAt, now)));
+}
+
+// ─── Resolutions ──────────────────────────────────────────────────────────────
+
+export async function createResolution(data: InsertResolution) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(resolutions).values(data);
+}
+
+export async function getResolutionByIntentId(intentId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(resolutions).where(eq(resolutions.intentId, intentId)).limit(1);
+  return result[0];
+}
+
+// ─── Settlements ──────────────────────────────────────────────────────────────
+
+export async function createSettlement(data: InsertSettlement) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(settlements).values(data);
+}
+
+export async function getAllSettlements(limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(settlements).orderBy(desc(settlements.createdAt)).limit(limit);
+}
+
+export async function getSettlementByIntentId(intentId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(settlements).where(eq(settlements.intentId, intentId)).limit(1);
+  return result[0];
+}
+
+export async function updateSettlementStatus(id: number, status: string, extra?: Partial<typeof settlements.$inferInsert>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(settlements).set({ status: status as any, ...extra, updatedAt: new Date() }).where(eq(settlements.id, id));
+}
+
+export async function getPendingEligibilitySettlements() {
+  const db = await getDb();
+  if (!db) return [];
+  const now = new Date();
+  return db.select().from(settlements).where(
+    and(eq(settlements.status, "WIN_PENDING_ELIGIBILITY"), gte(settlements.eligibilityClaimExpiresAt, now))
+  );
+}
+
+// ─── Reward Balances ──────────────────────────────────────────────────────────
+
+export async function getOrCreateRewardBalance(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(rewardBalances).where(eq(rewardBalances.userId, userId)).limit(1);
+  if (result[0]) return result[0];
+  await db.insert(rewardBalances).values({ userId, remainderUsd: "0", monthsAwardedLast365d: "0", windowStartedAt: new Date() });
+  const created = await db.select().from(rewardBalances).where(eq(rewardBalances.userId, userId)).limit(1);
+  return created[0] ?? null;
+}
+
+export async function updateRewardBalance(userId: number, remainderUsd: string, monthsAwardedLast365d: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(rewardBalances).set({ remainderUsd, monthsAwardedLast365d, updatedAt: new Date() }).where(eq(rewardBalances.userId, userId));
+}
+
+// ─── Ledger ───────────────────────────────────────────────────────────────────
+
+export async function appendLedger(data: InsertLedger) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(ledger).values(data);
+}
+
+export async function getLedgerByUser(userId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(ledger).where(eq(ledger.userId, userId)).orderBy(desc(ledger.createdAt)).limit(limit);
+}
+
+// ─── Resolver Runs ────────────────────────────────────────────────────────────
+
+export async function createResolverRun(data: InsertResolverRun) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(resolverRuns).values(data).$returningId();
+  return result?.id ?? 0;
+}
+
+export async function updateResolverRun(id: number, data: Partial<typeof resolverRuns.$inferInsert>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(resolverRuns).set(data).where(eq(resolverRuns.id, id));
+}
+
+export async function getLastResolverRun() {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(resolverRuns).orderBy(desc(resolverRuns.startedAt)).limit(1);
+  return result[0];
+}
+
+// ─── Legacy Incentives ────────────────────────────────────────────────────────
 
 export async function createIncentive(data: InsertIncentive) {
   const db = await getDb();
@@ -175,21 +376,13 @@ export async function createIncentive(data: InsertIncentive) {
 export async function getIncentivesByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
-    .from(incentives)
-    .where(eq(incentives.userId, userId))
-    .orderBy(desc(incentives.createdAt));
+  return db.select().from(incentives).where(eq(incentives.userId, userId)).orderBy(desc(incentives.createdAt));
 }
 
 export async function getIncentiveByTransactionId(transactionId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(incentives)
-    .where(eq(incentives.transactionId, transactionId))
-    .limit(1);
+  const result = await db.select().from(incentives).where(eq(incentives.transactionId, transactionId)).limit(1);
   return result[0];
 }
 
@@ -200,14 +393,50 @@ export async function updateIncentiveStatus(
 ) {
   const db = await getDb();
   if (!db) return;
-  await db
-    .update(incentives)
-    .set({ status, resolvedAt: status !== "pending" ? new Date() : undefined, notes })
-    .where(eq(incentives.id, incentiveId));
+  await db.update(incentives).set({ status, resolvedAt: status !== "pending" ? new Date() : undefined, notes }).where(eq(incentives.id, incentiveId));
 }
 
 export async function getAllIncentives() {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(incentives).orderBy(desc(incentives.createdAt));
+}
+
+// ─── Merchant KPIs ────────────────────────────────────────────────────────────
+
+export async function getMerchantKPIs() {
+  const db = await getDb();
+  if (!db) return null;
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [intents7d] = await db.select({ count: sql<number>`count(*)` }).from(intents).where(gte(intents.createdAt, sevenDaysAgo));
+  const [intents30d] = await db.select({ count: sql<number>`count(*)` }).from(intents).where(gte(intents.createdAt, thirtyDaysAgo));
+  const [totalResolutions] = await db.select({ count: sql<number>`count(*)` }).from(resolutions);
+  const [totalWins] = await db.select({ count: sql<number>`count(*)` }).from(resolutions).where(eq(resolutions.outcome, "WIN"));
+  const [appliedSettlements] = await db.select({ total: sql<number>`coalesce(sum(rewardValueUsd), 0)` }).from(settlements).where(eq(settlements.status, "APPLIED"));
+  const [pendingSettlements] = await db.select({ total: sql<number>`coalesce(sum(rewardValueUsd), 0)` }).from(settlements).where(eq(settlements.status, "WIN_PENDING_ELIGIBILITY"));
+  const [failedSettlements] = await db.select({ count: sql<number>`count(*)` }).from(settlements).where(eq(settlements.status, "FAILED_NEEDS_REVIEW"));
+  const [totalSettlements] = await db.select({ count: sql<number>`count(*)` }).from(settlements);
+  const [appliedCount] = await db.select({ count: sql<number>`count(*)` }).from(settlements).where(eq(settlements.status, "APPLIED"));
+  const lastRun = await getLastResolverRun();
+
+  const totalRes = Number(totalResolutions?.count ?? 0);
+  const totalWin = Number(totalWins?.count ?? 0);
+  const totalSett = Number(totalSettlements?.count ?? 0);
+  const appliedCnt = Number(appliedCount?.count ?? 0);
+
+  return {
+    intents7d: Number(intents7d?.count ?? 0),
+    intents30d: Number(intents30d?.count ?? 0),
+    totalResolutions: totalRes,
+    totalWins: totalWin,
+    winRate: totalRes > 0 ? Math.round((totalWin / totalRes) * 100) : 0,
+    awardsAppliedUsd: Number(appliedSettlements?.total ?? 0),
+    awardsPendingUsd: Number(pendingSettlements?.total ?? 0),
+    failedSettlements: Number(failedSettlements?.count ?? 0),
+    settlementSuccessRate: totalSett > 0 ? Math.round((appliedCnt / totalSett) * 100) : 0,
+    lastResolverRun: lastRun ?? null,
+  };
 }

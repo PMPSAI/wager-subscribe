@@ -8,17 +8,35 @@ import Home from "./pages/Home";
 import Plans from "./pages/Plans";
 import IncentivSelect from "./pages/WagerSelect";
 import Dashboard from "./pages/Dashboard";
+import MerchantDashboard from "./pages/merchant/MerchantDashboard";
+import MerchantCampaigns from "./pages/merchant/MerchantCampaigns";
+import MerchantIntents from "./pages/merchant/MerchantIntents";
+import MerchantSettlements from "./pages/merchant/MerchantSettlements";
+import MerchantResolver from "./pages/merchant/MerchantResolver";
+import MerchantWebhook from "./pages/merchant/MerchantWebhook";
 
 function Router() {
   return (
     <Switch>
+      {/* Public */}
       <Route path="/" component={Home} />
       <Route path="/plans" component={Plans} />
-      {/* Legacy route kept for backward compatibility */}
-      <Route path="/wager-select" component={IncentivSelect} />
-      {/* Primary post-checkout route */}
+
+      {/* Post-checkout incentive selection */}
       <Route path="/incentiv-select" component={IncentivSelect} />
+      <Route path="/wager-select" component={IncentivSelect} />
+
+      {/* Customer dashboard */}
       <Route path="/dashboard" component={Dashboard} />
+
+      {/* Merchant Portal (admin only, guarded inside each page) */}
+      <Route path="/merchant" component={MerchantDashboard} />
+      <Route path="/merchant/campaigns" component={MerchantCampaigns} />
+      <Route path="/merchant/intents" component={MerchantIntents} />
+      <Route path="/merchant/settlements" component={MerchantSettlements} />
+      <Route path="/merchant/resolver" component={MerchantResolver} />
+      <Route path="/merchant/webhook" component={MerchantWebhook} />
+
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

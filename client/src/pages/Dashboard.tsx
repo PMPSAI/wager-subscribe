@@ -1,409 +1,332 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
+import { useLocation, Link } from "wouter";
+import { useEffect, useState } from "react";
+import { getLoginUrl } from "@/const";
+import { Button } from "@/components/ui/button";
 import {
-  Trophy, TrendingUp, BarChart3, Zap, CheckCircle2, XCircle, Clock,
-  Crown, Rocket, Star, ArrowRight, RefreshCw, Loader2, Ban, CreditCard, Target, Sparkles,
+  Target, Trophy, Clock, DollarSign, Star, RefreshCw, Plus,
+  CheckCircle, XCircle, AlertCircle, Wallet, Activity, CreditCard, ArrowRight
 } from "lucide-react";
-import { useLocation } from "wouter";
-import { useState } from "react";
+import { toast } from "sonner";
 
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
-  pending: {
-    label: "Tracking",
-    icon: <Clock size={14} />,
-    className: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  },
-  achieved: {
-    label: "Reward Earned",
-    icon: <Trophy size={14} />,
-    className: "bg-green-50 text-green-700 border-green-200",
-  },
-  not_achieved: {
-    label: "Not Achieved",
-    icon: <XCircle size={14} />,
-    className: "bg-red-50 text-red-700 border-red-200",
-  },
-  expired: {
-    label: "Expired",
-    icon: <Ban size={14} />,
-    className: "bg-gray-50 text-gray-600 border-gray-200",
-  },
-  cancelled: {
-    label: "Cancelled",
-    icon: <Ban size={14} />,
-    className: "bg-gray-50 text-gray-600 border-gray-200",
-  },
-};
+function Countdown({ to }: { to: Date | string }) {
+  const target = new Date(to).getTime();
+  const [remaining, setRemaining] = useState(target - Date.now());
 
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  market: <TrendingUp size={14} className="text-blue-500" />,
-  sports: <Trophy size={14} className="text-yellow-500" />,
-  economy: <BarChart3 size={14} className="text-green-500" />,
-  custom: <Sparkles size={14} className="text-purple-500" />,
-};
+  useEffect(() => {
+    const t = setInterval(() => setRemaining(target - Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [target]);
 
-const CATEGORY_COLORS: Record<string, string> = {
-  market: "bg-blue-50 text-blue-700 border-blue-200",
-  sports: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  economy: "bg-green-50 text-green-700 border-green-200",
-  custom: "bg-purple-50 text-purple-700 border-purple-200",
-};
+  if (remaining <= 0) return <span className="text-red-500 font-semibold text-sm">Expired</span>;
 
-const PLAN_ICONS: Record<string, React.ReactNode> = {
-  starter: <Rocket size={16} className="text-primary" />,
-  pro: <Star size={16} className="text-yellow-500" />,
-  elite: <Crown size={16} className="text-amber-500" />,
-};
+  const days = Math.floor(remaining / 86400000);
+  const hrs = Math.floor((remaining % 86400000) / 3600000);
+  const mins = Math.floor((remaining % 3600000) / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
 
-function formatCents(cents: number) {
-  return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+  return (
+    <div className="flex items-center gap-1 text-sm font-mono">
+      {days > 0 && <span className="bg-gray-100 px-1.5 py-0.5 rounded font-bold text-gray-800">{days}d</span>}
+      <span className="bg-gray-100 px-1.5 py-0.5 rounded font-bold text-gray-800">{String(hrs).padStart(2,"0")}h</span>
+      <span className="text-gray-400">:</span>
+      <span className="bg-gray-100 px-1.5 py-0.5 rounded font-bold text-gray-800">{String(mins).padStart(2,"0")}m</span>
+      <span className="text-gray-400">:</span>
+      <span className="bg-gray-100 px-1.5 py-0.5 rounded font-bold text-gray-800">{String(secs).padStart(2,"0")}s</span>
+    </div>
+  );
 }
 
-function formatDate(date: Date | string | null | undefined) {
-  if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const intentStatusConfig: Record<string, { label: string; color: string; icon: any }> = {
+  TRACKING:           { label: "Tracking",        color: "bg-blue-100 text-blue-700",       icon: Clock },
+  PENDING_RESOLUTION: { label: "Pending",          color: "bg-yellow-100 text-yellow-700",   icon: AlertCircle },
+  RESOLVED_WIN:       { label: "Reward Earned",    color: "bg-emerald-100 text-emerald-700", icon: Trophy },
+  RESOLVED_LOSS:      { label: "Not Achieved",     color: "bg-red-100 text-red-700",         icon: XCircle },
+  CANCELLED:          { label: "Cancelled",        color: "bg-gray-100 text-gray-500",       icon: XCircle },
+  CREATED:            { label: "Created",          color: "bg-gray-100 text-gray-600",       icon: Clock },
+};
+
+function IntentStatusBadge({ status }: { status: string }) {
+  const cfg = intentStatusConfig[status] ?? { label: status, color: "bg-gray-100 text-gray-600", icon: AlertCircle };
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
+      <Icon className="w-3 h-3" /> {cfg.label}
+    </span>
+  );
 }
 
-interface IncentiveWithTx {
-  id: number;
-  transactionId: number;
-  conditionKey: string;
-  conditionLabel: string;
-  conditionCategory: "market" | "sports" | "economy" | "custom";
-  conditionDetail: string | null;
-  rewardDescription: string;
-  rewardValueCents: number;
-  status: "pending" | "achieved" | "not_achieved" | "expired" | "cancelled";
-  resolvedAt: Date | null;
-  expiresAt: Date | null;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  transaction: {
-    id: number;
-    stripeSessionId: string;
-    planName: string;
-    planTier: string;
-    amountCents: number;
-    status: string;
-  } | null;
+function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: any; color: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${color}`}>
+        <Icon className="w-4 h-4 text-white" />
+      </div>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <p className="text-sm text-gray-500 mt-0.5">{label}</p>
+    </div>
+  );
 }
 
 export default function Dashboard() {
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
-  const [simulatingId, setSimulatingId] = useState<number | null>(null);
 
+  useEffect(() => {
+    if (!loading && !isAuthenticated) navigate("/");
+  }, [loading, isAuthenticated]);
+
+  const utils = trpc.useUtils();
   const { data, isLoading, refetch } = trpc.dashboard.summary.useQuery(undefined, {
-    enabled: isAuthenticated,
-    refetchInterval: 10000,
+    enabled: !!user,
+    refetchInterval: 30000,
   });
 
-  const resolveIncentive = trpc.incentiv.resolveIncentive.useMutation({
-    onSuccess: () => {
-      toast.success("Incentive outcome updated!");
-      refetch();
-      setSimulatingId(null);
-    },
-    onError: (err: { message: string }) => {
-      toast.error(err.message);
-      setSimulatingId(null);
-    },
+  const billingPortalMutation = trpc.subscription.billingPortal.useMutation({
+    onSuccess: (res) => { if (res.url) window.open(res.url, "_blank"); },
+    onError: (e) => toast.error(e.message),
   });
 
-  const handleSimulate = async (incentiveId: number, outcome: "achieved" | "not_achieved") => {
-    setSimulatingId(incentiveId);
-    await resolveIncentive.mutateAsync({ incentiveId, outcome });
-  };
-
-  if (authLoading) {
+  if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 size={40} className="animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Card className="max-w-md w-full mx-4">
-          <CardContent className="pt-8 pb-8 text-center space-y-4">
-            <Target size={40} className="text-primary mx-auto" />
-            <h2 className="text-xl font-bold text-foreground">Sign in to view your dashboard</h2>
-            <p className="text-muted-foreground">Track your incentives, subscriptions, and rewards.</p>
-            <Button onClick={() => (window.location.href = getLoginUrl())} className="w-full">
-              Sign In
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container max-w-5xl mx-auto py-10 px-4 space-y-6">
-          <div className="h-10 w-48 bg-muted rounded-lg animate-pulse" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />)}
-          </div>
-          <div className="h-64 bg-muted rounded-xl animate-pulse" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center max-w-sm">
+          <Target className="w-10 h-10 text-emerald-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Sign in to view your dashboard</h2>
+          <p className="text-gray-500 text-sm mb-5">Track your incentives, subscriptions, and rewards.</p>
+          <Button onClick={() => (window.location.href = getLoginUrl())} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+            Sign In
+          </Button>
         </div>
       </div>
     );
   }
 
-  const stats = data?.stats ?? { total: 0, pending: 0, achieved: 0, notAchieved: 0, totalRewardCents: 0 };
-  const incentives = (data?.incentives ?? []) as IncentiveWithTx[];
+  const stats = data?.stats;
+  const intents = data?.intents ?? [];
+  const balance = data?.balance;
+  const ledger = data?.ledger ?? [];
   const subscription = data?.subscription;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container max-w-5xl mx-auto py-10 px-4 space-y-8">
-
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">My Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Welcome back, {user?.name ?? "there"}</p>
+    <div className="min-h-screen bg-[#f8f9fa]">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
+              <span className="text-white font-bold text-xs">IS</span>
+            </div>
+            <span className="font-semibold text-gray-900 text-sm">IncentivSubscribe</span>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
-              <RefreshCw size={14} /> Refresh
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-500">Welcome back, {user.name?.split(" ")[0]}</span>
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => refetch()}>
+              <RefreshCw className="w-3 h-3" /> Refresh
             </Button>
-            <Button size="sm" onClick={() => navigate("/plans")} className="gap-1.5">
-              <CreditCard size={14} /> New Plan
-            </Button>
+            <Link href="/plans">
+              <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
+                <Plus className="w-3 h-3" /> New Plan
+              </Button>
+            </Link>
+            {user.role === "admin" && (
+              <Link href="/merchant">
+                <Button size="sm" variant="outline" className="h-8 text-xs">Merchant Portal</Button>
+              </Link>
+            )}
           </div>
         </div>
+      </header>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: "Total Incentives", value: stats.total, icon: <Target size={18} className="text-primary" />, color: "bg-primary/5" },
-            { label: "Tracking", value: stats.pending, icon: <Clock size={18} className="text-yellow-500" />, color: "bg-yellow-50" },
-            { label: "Rewards Earned", value: stats.achieved, icon: <Trophy size={18} className="text-green-600" />, color: "bg-green-50" },
-            { label: "Total Reward Value", value: formatCents(stats.totalRewardCents), icon: <Zap size={18} className="text-purple-500" />, color: "bg-purple-50" },
-          ].map((s) => (
-            <Card key={s.label} className="border-border">
-              <CardContent className="pt-5 pb-5">
-                <div className={`w-9 h-9 rounded-lg ${s.color} flex items-center justify-center mb-3`}>
-                  {s.icon}
-                </div>
-                <p className="text-2xl font-bold text-foreground">{s.value}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <StatCard label="Total Incentives" value={stats?.totalIntents ?? 0} icon={Target} color="bg-blue-500" />
+          <StatCard label="Tracking" value={stats?.trackingIntents ?? 0} icon={Clock} color="bg-yellow-500" />
+          <StatCard label="Rewards Earned" value={stats?.wonIntents ?? 0} icon={Trophy} color="bg-emerald-500" />
+          <StatCard label="Reward Balance" value={`$${(stats?.remainderUsd ?? 0).toFixed(2)}`} icon={DollarSign} color="bg-violet-500" />
         </div>
 
-        {/* Active Subscription */}
         {subscription ? (
-          <Card className="border-border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                {PLAN_ICONS[subscription.planTier]}
-                Active Subscription
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-6 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Plan</p>
-                  <p className="font-semibold text-foreground capitalize">{subscription.planName}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Status</p>
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 capitalize">
-                    {subscription.status}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Renews</p>
-                  <p className="font-semibold text-foreground">
-                    {subscription.currentPeriodEnd
-                      ? formatDate(new Date(subscription.currentPeriodEnd))
-                      : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Subscription ID</p>
-                  <p className="font-mono text-xs text-foreground">{subscription.stripeSubscriptionId.slice(0, 20)}...</p>
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Star className="w-5 h-5 text-yellow-500" />
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Active Subscription</p>
+                <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                  <span>Plan: <strong className="text-gray-700">{subscription.planName}</strong></span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Active</span>
+                  {subscription.currentPeriodEnd && (
+                    <span>Renews: <strong className="text-gray-700">{new Date(subscription.currentPeriodEnd).toLocaleDateString()}</strong></span>
+                  )}
+                  <span className="font-mono text-gray-400 truncate max-w-[180px]">
+                    {subscription.stripeSubscriptionId?.slice(0, 24)}...
+                  </span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            <Button size="sm" variant="outline" className="text-xs h-8"
+              disabled={billingPortalMutation.isPending}
+              onClick={() => billingPortalMutation.mutate()}
+            >
+              Manage Billing
+            </Button>
+          </div>
         ) : (
-          <Card className="border-dashed border-2 border-border">
-            <CardContent className="py-8 text-center space-y-3">
-              <CreditCard size={32} className="text-muted-foreground mx-auto" />
-              <p className="font-semibold text-foreground">No active subscription</p>
-              <p className="text-sm text-muted-foreground">Subscribe to a plan to activate your first performance incentive.</p>
-              <Button onClick={() => navigate("/plans")} className="gap-2">
-                View Plans <ArrowRight size={16} />
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl border-2 border-dashed border-gray-200 p-8 mb-6 text-center">
+            <CreditCard className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+            <p className="font-semibold text-gray-700">No active subscription</p>
+            <p className="text-sm text-gray-400 mt-1">Subscribe to a plan to activate your first performance incentive.</p>
+            <Link href="/plans">
+              <Button size="sm" className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-2">View Plans <ArrowRight className="w-3.5 h-3.5" /></Button>
+            </Link>
+          </div>
         )}
 
-        {/* Incentive History */}
-        <div>
-          <h2 className="text-xl font-bold text-foreground mb-4">Incentive History</h2>
+        {balance && parseFloat(balance.remainderUsd ?? "0") > 0 && (
+          <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-xl p-5 mb-6 text-white flex items-center justify-between">
+            <div>
+              <p className="text-emerald-100 text-sm font-medium">Available Reward Balance</p>
+              <p className="text-3xl font-bold mt-1">${parseFloat(balance.remainderUsd).toFixed(2)}</p>
+              <p className="text-emerald-200 text-xs mt-1">Applied to your subscription billing</p>
+            </div>
+            <Wallet className="w-12 h-12 text-emerald-400 opacity-60" />
+          </div>
+        )}
 
-          {incentives.length === 0 ? (
-            <Card className="border-dashed border-2 border-border">
-              <CardContent className="py-12 text-center space-y-3">
-                <Target size={40} className="text-muted-foreground mx-auto" />
-                <p className="font-semibold text-foreground">No incentives yet</p>
-                <p className="text-sm text-muted-foreground">
-                  Subscribe to a plan and select your incentive condition to get started.
-                </p>
-                <Button onClick={() => navigate("/plans")} className="gap-2">
-                  Start with a Plan <ArrowRight size={16} />
-                </Button>
-              </CardContent>
-            </Card>
+        <div className="mb-8">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">Incentive History</h2>
+
+          {isLoading ? (
+            <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-28 bg-white rounded-xl border border-gray-200 animate-pulse" />)}</div>
+          ) : !intents.length ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <Target className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">No incentives yet</p>
+              <p className="text-sm text-gray-400 mt-1">Subscribe to a plan and select a condition to get started</p>
+              <Link href="/plans">
+                <Button size="sm" className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white">Browse Plans</Button>
+              </Link>
+            </div>
           ) : (
             <div className="space-y-4">
-              {incentives.map((incentive: IncentiveWithTx) => {
-                const statusCfg = STATUS_CONFIG[incentive.status] ?? STATUS_CONFIG["pending"];
-                const isAchieved = incentive.status === "achieved";
-                const isNotAchieved = incentive.status === "not_achieved";
-                const isPending = incentive.status === "pending";
-
+              {intents.map((intent: any) => {
+                const terms = intent.termsSnapshot as any;
+                const isWin = intent.status === "RESOLVED_WIN";
+                const isTracking = intent.status === "TRACKING" || intent.status === "PENDING_RESOLUTION";
                 return (
-                  <Card
-                    key={incentive.id}
-                    className={`border-2 transition-all ${
-                      isAchieved
-                        ? "border-green-200 bg-green-50/30"
-                        : isNotAchieved
-                        ? "border-red-100"
-                        : "border-border"
-                    }`}
-                  >
-                    <CardContent className="pt-5 pb-5">
-                      <div className="flex flex-wrap items-start gap-4 justify-between mb-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className="font-bold text-foreground text-base">{incentive.conditionLabel}</span>
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                              CATEGORY_COLORS[incentive.conditionCategory]
-                            }`}>
-                              {CATEGORY_ICONS[incentive.conditionCategory]}
-                              {incentive.conditionCategory.charAt(0).toUpperCase() + incentive.conditionCategory.slice(1)}
-                            </span>
-                          </div>
-                          {incentive.conditionDetail && (
-                            <p className="text-sm text-muted-foreground">{incentive.conditionDetail}</p>
-                          )}
-                        </div>
-                        <Badge variant="outline" className={`flex items-center gap-1 shrink-0 ${statusCfg.className}`}>
-                          {statusCfg.icon}
-                          {statusCfg.label}
-                        </Badge>
+                  <div key={intent.id} className={`bg-white rounded-xl border p-5 ${isWin ? "border-emerald-200" : "border-gray-200"}`}>
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="font-semibold text-gray-900">{terms?.conditionLabel ?? `Incentive #${intent.id}`}</p>
+                        {terms?.conditionDescription && (
+                          <p className="text-sm text-gray-500 mt-0.5">{terms.conditionDescription}</p>
+                        )}
                       </div>
+                      <IntentStatusBadge status={intent.status} />
+                    </div>
 
-                      {/* Metadata grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm bg-muted/50 rounded-lg p-3 mb-4">
-                        <div>
-                          <p className="text-muted-foreground text-xs">Incentive ID</p>
-                          <p className="font-mono font-semibold text-foreground">#{incentive.id}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-3">
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Incentive ID</p>
+                        <p className="font-mono font-semibold text-gray-700">#{intent.id}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Transaction ID</p>
+                        <p className="font-mono text-gray-600">{intent.transactionId ? `#${intent.transactionId}` : "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Activated</p>
+                        <p className="font-semibold text-gray-700">{new Date(intent.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Resolves</p>
+                        <p className="font-semibold text-gray-700">{intent.resolveAt ? new Date(intent.resolveAt).toLocaleDateString() : "—"}</p>
+                      </div>
+                    </div>
+
+                    {isTracking && intent.resolveAt && (
+                      <div className="bg-blue-50 rounded-lg px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-blue-500" />
+                          <span className="text-xs text-blue-700 font-medium">Time remaining</span>
                         </div>
-                        <div>
-                          <p className="text-muted-foreground text-xs">Transaction ID</p>
-                          <p className="font-mono font-semibold text-foreground text-xs">
-                            {incentive.transaction?.stripeSessionId?.slice(0, 16)}...
-                          </p>
+                        <Countdown to={intent.resolveAt} />
+                      </div>
+                    )}
+
+                    {isWin && terms?.rewardValueUsd && (
+                      <div className="bg-emerald-50 rounded-lg px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Trophy className="w-4 h-4 text-emerald-600" />
+                          <div>
+                            <p className="text-xs font-bold text-emerald-700">REWARD APPLIED</p>
+                            <p className="text-sm font-bold text-emerald-800">${parseFloat(terms.rewardValueUsd).toFixed(2)} credit applied to account</p>
+                          </div>
                         </div>
+                        <CheckCircle className="w-5 h-5 text-emerald-500" />
+                      </div>
+                    )}
+
+                    {intent.status === "RESOLVED_LOSS" && (
+                      <div className="bg-gray-50 rounded-lg px-4 py-3 flex items-center gap-2">
+                        <XCircle className="w-4 h-4 text-gray-400" />
                         <div>
-                          <p className="text-muted-foreground text-xs">Activated</p>
-                          <p className="font-semibold text-foreground">{formatDate(incentive.createdAt)}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground text-xs">Expires</p>
-                          <p className="font-semibold text-foreground">{formatDate(incentive.expiresAt)}</p>
+                          <p className="text-xs font-medium text-gray-600">Condition not met within the resolution window</p>
+                          <p className="text-xs text-gray-400">Your subscription continues normally at the standard rate.</p>
                         </div>
                       </div>
-
-                      {/* Outcome panel */}
-                      {isAchieved ? (
-                        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                            <Trophy size={20} className="text-green-600" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-wide text-green-700">Reward Applied</p>
-                            <p className="font-bold text-green-800 text-lg">{incentive.rewardDescription}</p>
-                            <p className="text-xs text-green-600/70">{formatCents(incentive.rewardValueCents)} credited to account</p>
-                          </div>
-                        </div>
-                      ) : isNotAchieved ? (
-                        <div className="bg-muted rounded-xl p-4 flex items-center gap-3">
-                          <XCircle size={20} className="text-muted-foreground shrink-0" />
-                          <div>
-                            <p className="font-medium text-foreground">Condition not met within the 30-day window</p>
-                            <p className="text-sm text-muted-foreground">Your subscription continues normally at the standard rate.</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <Zap size={18} className="text-primary shrink-0" fill="currentColor" />
-                            <div>
-                              <p className="text-xs font-bold uppercase tracking-wide text-primary">Potential Reward</p>
-                              <p className="font-bold text-foreground">{incentive.rewardDescription}</p>
-                            </div>
-                          </div>
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
-                            <Clock size={11} className="mr-1" /> Tracking
-                          </Badge>
-                        </div>
-                      )}
-
-                      {/* Admin simulation controls */}
-                      {user?.role === "admin" && isPending && (
-                        <div className="mt-4 p-4 bg-slate-900 rounded-xl border border-slate-700">
-                          <p className="text-[10px] font-mono text-slate-400 mb-3 uppercase tracking-widest">
-                            Admin Simulation Controls
-                          </p>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              className="flex-1 bg-green-600 hover:bg-green-500 text-white text-xs"
-                              onClick={() => handleSimulate(incentive.id, "achieved")}
-                              disabled={simulatingId === incentive.id}
-                            >
-                              {simulatingId === incentive.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <CheckCircle2 size={12} className="mr-1" />}
-                              Simulate: Condition MET
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 bg-slate-700 hover:bg-slate-600 text-white border-slate-600 text-xs"
-                              onClick={() => handleSimulate(incentive.id, "not_achieved")}
-                              disabled={simulatingId === incentive.id}
-                            >
-                              {simulatingId === incentive.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <XCircle size={12} className="mr-1" />}
-                              Simulate: Condition MISSED
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                    )}
+                  </div>
                 );
               })}
             </div>
           )}
         </div>
+
+        {ledger.length > 0 && (
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-gray-400" /> Activity Ledger
+            </h2>
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    {["Event", "Amount", "Date"].map(h => (
+                      <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {ledger.map((entry: any) => (
+                    <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <p className="font-medium text-gray-800">{entry.description}</p>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5">{entry.eventType}</p>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`font-semibold ${parseFloat(entry.amountUsd ?? "0") > 0 ? "text-emerald-600" : "text-gray-400"}`}>
+                          {parseFloat(entry.amountUsd ?? "0") > 0 ? `+$${parseFloat(entry.amountUsd ?? "0").toFixed(2)}` : "$0.00"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-gray-500 text-xs">
+                        {new Date(entry.createdAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

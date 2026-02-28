@@ -57,3 +57,52 @@
 - [x] Update tests for renamed procedures
 - [x] TypeScript clean, all tests pass
 - [x] Save checkpoint
+
+## Phase 7: Full IncentivSubscribe Rebuild (Merchant Portal + Enhanced Customer Dashboard)
+
+### Database Schema
+- [x] Add campaigns table
+- [x] Add incentiveOptions table
+- [x] Add intents table (with locked terms snapshot JSON)
+- [x] Add resolutions table (immutable, with proof_json)
+- [x] Add settlements table (full status machine)
+- [x] Add rewardBalances table
+- [x] Add ledger table
+- [x] Add resolverRuns table
+- [x] Push DB migration
+
+### Backend Routers
+- [x] campaign router (CRUD + toggle)
+- [x] intent router (create, list, detail)
+- [x] resolver router (run job, last/next run)
+- [x] settlement router (list, retry)
+- [x] ledger router
+- [x] merchant KPI router
+- [x] Update webhook for new domain objects
+- [x] Idempotency for settlement writes
+- [x] 12-month cap enforcement
+- [x] Reward $ value calculation + remainder logic
+- [x] WIN_PENDING_ELIGIBILITY + 7-day retry
+
+### Merchant Portal UI
+- [x] Merchant Dashboard KPIs page
+- [x] Campaigns list + builder page
+- [x] Intents table + detail view
+- [x] Settlements table + audit proof
+- [x] Webhook Diagnostics page
+- [x] Merchant sidebar nav
+
+### Customer Dashboard Enhancements
+- [x] Countdown to next weekly resolution
+- [x] Next charge date display
+- [x] Value won + months deferred
+- [x] Remainder reward balance
+- [x] WIN_PENDING_ELIGIBILITY CTA + 7-day countdown
+- [x] Compliance terms at incentive selection
+- [x] Support contact link
+
+### Final
+- [x] Seed data (2 campaigns, 3 options each)
+- [x] Update vitest tests
+- [x] TypeScript clean
+- [x] Save checkpoint
