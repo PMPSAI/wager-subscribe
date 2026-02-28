@@ -106,3 +106,18 @@
 - [x] Update vitest tests
 - [x] TypeScript clean
 - [x] Save checkpoint
+
+## Phase 8: Compliance Audit & IncentivPay Rename
+
+- [ ] Full regulatory compliance audit (CFPB, FTC, state gambling laws, UDAAP, EFTA)
+- [ ] Rename WagerSubscribe → IncentivPay in package.json, HTML title, App.tsx, index.css
+- [ ] Rename all UI copy: Home, Plans, Dashboard, IncentivSelect, MerchantLayout pages
+- [ ] Update VITE_APP_TITLE to IncentivPay
+- [ ] Add compliance footer with legal disclaimers to all pages
+- [ ] Add Terms of Service / Disclosure notice on Plans page before checkout
+- [ ] Add "Not a financial product" disclaimer on IncentivSelect page
+- [ ] Ensure all reward language is framed as "subscription credit" not "prize" or "payout"
+- [ ] Remove any language implying guaranteed returns or financial gain
+- [ ] Run TypeScript check and all tests
+- [ ] Save checkpoint
+- [ ] Deliver compliance audit report to user

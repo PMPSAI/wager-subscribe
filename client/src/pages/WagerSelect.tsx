@@ -182,7 +182,7 @@ export default function IncentivSelect() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Zap size={16} className="text-primary-foreground" fill="currentColor" />
             </div>
-            <span className="font-bold text-foreground text-lg">WagerSubscribe</span>
+            <span className="font-bold text-foreground text-lg">IncentivPay</span>
           </button>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <CheckCircle2 size={14} className="text-green-500" /> Payment confirmed
@@ -297,8 +297,7 @@ export default function IncentivSelect() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              Once confirmed, your incentive condition is locked for this transaction and cannot be changed.
-              This is not a gambling product — rewards are issued as subscription credits only.
+              Once confirmed, your incentive condition is locked for this transaction and cannot be changed. IncentivPay is not a gambling product, financial product, or money-services business. Rewards are issued exclusively as non-cash, non-transferable subscription credits applied to future billing cycles.
             </p>
           </div>
         )}

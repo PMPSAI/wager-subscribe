@@ -7,8 +7,10 @@ export interface Plan {
   amountCents: number;
   currency: string;
   features: string[];
-  wagerSlots: number;
-  wagerCategories: string[];
+  /** Number of active incentive conditions allowed per billing cycle. -1 = unlimited. */
+  incentiveSlots: number;
+  /** Condition categories available to this tier. */
+  conditionCategories: string[];
   rewardDescription: string;
   rewardValueCents: number;
   popular?: boolean;
@@ -22,14 +24,14 @@ export const PLANS: Plan[] = [
     amountCents: 900,
     currency: "usd",
     features: [
-      "1 active wager per month",
+      "1 active incentive condition per month",
       "Market conditions only",
       "Email support",
-      "Basic dashboard",
+      "Basic performance dashboard",
     ],
-    wagerSlots: 1,
-    wagerCategories: ["market"],
-    rewardDescription: "1 Month Free ($9 value)",
+    incentiveSlots: 1,
+    conditionCategories: ["market"],
+    rewardDescription: "1 Month Free ($9 subscription credit)",
     rewardValueCents: 900,
   },
   {
@@ -39,15 +41,15 @@ export const PLANS: Plan[] = [
     amountCents: 2900,
     currency: "usd",
     features: [
-      "5 active wagers per month",
+      "5 active incentive conditions per month",
       "Market, Sports & Economy conditions",
       "Priority 24/7 support",
       "Full analytics dashboard",
-      "Wager history & export",
+      "Incentive history & export",
     ],
-    wagerSlots: 5,
-    wagerCategories: ["market", "sports", "economy"],
-    rewardDescription: "12 Months Free ($348 value)",
+    incentiveSlots: 5,
+    conditionCategories: ["market", "sports", "economy"],
+    rewardDescription: "12 Months Free ($348 subscription credit)",
     rewardValueCents: 34800,
     popular: true,
   },
@@ -58,16 +60,16 @@ export const PLANS: Plan[] = [
     amountCents: 7900,
     currency: "usd",
     features: [
-      "Unlimited active wagers",
-      "All conditions + Custom wagers",
+      "Unlimited active incentive conditions",
+      "All condition categories including Custom",
       "1-on-1 dedicated support",
       "Early access to new features",
       "Advanced analytics & reporting",
       "API access",
     ],
-    wagerSlots: -1, // unlimited
-    wagerCategories: ["market", "sports", "economy", "custom"],
-    rewardDescription: "24 Months Free ($1,896 value)",
+    incentiveSlots: -1,
+    conditionCategories: ["market", "sports", "economy", "custom"],
+    rewardDescription: "24 Months Free ($1,896 subscription credit)",
     rewardValueCents: 189600,
   },
 ];

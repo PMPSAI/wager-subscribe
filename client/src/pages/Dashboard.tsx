@@ -123,9 +123,9 @@ export default function Dashboard() {
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">IS</span>
+              <span className="text-white font-bold text-xs">IP</span>
             </div>
-            <span className="font-semibold text-gray-900 text-sm">IncentivSubscribe</span>
+            <span className="font-semibold text-gray-900 text-sm">IncentivPay</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-500">Welcome back, {user.name?.split(" ")[0]}</span>

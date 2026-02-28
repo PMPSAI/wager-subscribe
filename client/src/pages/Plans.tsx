@@ -60,7 +60,7 @@ export default function Plans() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Zap size={16} className="text-primary-foreground" fill="currentColor" />
             </div>
-            <span className="font-bold text-foreground text-lg">WagerSubscribe</span>
+            <span className="font-bold text-foreground text-lg">IncentivPay</span>
           </button>
           <nav className="flex items-center gap-3">
             {isAuthenticated && (
@@ -85,7 +85,7 @@ export default function Plans() {
             <span className="text-primary">Earn Your Reward.</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Every plan includes a performance incentive. Choose a real-world condition after payment — if it occurs within 30 days, you earn a reward equal to your subscription value.
+            Every plan includes a performance incentive. Choose a real-world condition after payment — if it occurs within 30 days, you earn a subscription credit equal to your plan value. Rewards are not cash and have no monetary value outside of IncentivPay.
           </p>
           <div className="flex items-center justify-center gap-6 mt-6 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5"><Shield size={14} className="text-green-500" /> Stripe-secured payments</span>
@@ -153,13 +153,13 @@ export default function Plans() {
                       {plan.rewardDescription}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      Select a condition after payment. Achieved within 30 days = reward earned.
+                      Select a condition after payment. If achieved within 30 days, a subscription credit is applied to your account. Credits are non-cash and non-transferable.
                     </p>
                   </div>
 
                   <div className="text-xs text-muted-foreground">
                     <span className="font-semibold text-foreground">Available conditions: </span>
-                    {plan.wagerCategories.join(", ")}
+                    {plan.conditionCategories.join(", ")}
                   </div>
 
                   <Button
@@ -181,10 +181,12 @@ export default function Plans() {
           </div>
         )}
 
-        {/* Compliance note */}
-        <div className="mt-10 text-center text-xs text-muted-foreground max-w-2xl mx-auto space-y-1">
-          <p>All plans are billed monthly via Stripe and can be cancelled anytime from your account settings.</p>
-          <p>Performance incentives are non-transferable, subject to 30-day tracking windows, and are not a financial product, investment vehicle, or gambling service. Rewards are issued as subscription credits.</p>
+        {/* Compliance Disclosure */}
+        <div className="mt-10 border border-border rounded-xl p-5 text-xs text-muted-foreground max-w-3xl mx-auto space-y-2 bg-muted/30">
+          <p className="font-semibold text-foreground text-sm">Important Disclosure</p>
+          <p>All plans are billed monthly via Stripe and may be cancelled at any time from your account settings. Cancellation takes effect at the end of the current billing period.</p>
+          <p>IncentivPay performance incentives are <strong>not</strong> a financial product, investment vehicle, insurance product, gambling service, or money-services business. No cash, prizes, or monetary transfers are made to subscribers. Rewards are issued exclusively as subscription credits applied to future IncentivPay billing cycles. Subscription credits have no cash value, are non-transferable, and cannot be redeemed for cash or any other monetary equivalent.</p>
+          <p>Incentive conditions are tracked against publicly available third-party data sources. Condition outcomes are determined solely by IncentivPay's resolver process and are final. Past condition outcomes are not indicative of future results. By subscribing, you agree to the IncentivPay Terms of Service.</p>
         </div>
 
         <div className="mt-8 text-center">

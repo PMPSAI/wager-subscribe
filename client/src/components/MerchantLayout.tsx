@@ -29,10 +29,10 @@ export default function MerchantLayout({ children }: { children: React.ReactNode
         <div className="px-5 py-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">IS</span>
+              <span className="text-white font-bold text-sm">IP</span>
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900 leading-tight">IncentivSubscribe</p>
+              <p className="text-sm font-bold text-gray-900 leading-tight">IncentivPay</p>
               <p className="text-xs text-gray-500">Merchant Dashboard</p>
             </div>
           </div>
