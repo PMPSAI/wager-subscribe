@@ -452,7 +452,7 @@ export const appRouter = router({
     lastRun: protectedProcedure.query(async ({ ctx }) => {
       requireAdmin(ctx.user.role);
       const { getLastResolverRun } = await import("./db");
-      return getLastResolverRun();
+      return (await getLastResolverRun()) ?? null;
     }),
   }),
 
@@ -460,7 +460,19 @@ export const appRouter = router({
   merchant: router({
     kpis: protectedProcedure.query(async ({ ctx }) => {
       requireAdmin(ctx.user.role);
-      return getMerchantKPIs();
+      const kpis = await getMerchantKPIs();
+      return kpis ?? {
+        intents7d: 0,
+        intents30d: 0,
+        totalResolutions: 0,
+        totalWins: 0,
+        winRate: 0,
+        awardsAppliedUsd: 0,
+        awardsPendingUsd: 0,
+        failedSettlements: 0,
+        settlementSuccessRate: 0,
+        lastResolverRun: null,
+      };
     }),
   }),
 
