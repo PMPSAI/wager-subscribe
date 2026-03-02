@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import Stripe from "stripe";
+import { pushWebhookEvent } from "./_core/webhookEvents";
 import {
   createSubscription,
   getSubscriptionByStripeId,
@@ -9,27 +10,60 @@ import {
   updateUserStripeCustomerId,
 } from "./db";
 import { getPlanByPriceId } from "./products";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
+import { getStripe } from "./stripe";
 
 export function registerStripeWebhook(app: Express) {
   app.post("/api/stripe/webhook", async (req: Request, res: Response) => {
+    let stripe: Stripe;
+    try {
+      stripe = getStripe();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Stripe not configured";
+      console.error("[Webhook]", message);
+      return res.status(503).json({ error: message });
+    }
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error("[Webhook] STRIPE_WEBHOOK_SECRET is not set");
+      return res.status(503).json({ error: "STRIPE_WEBHOOK_SECRET is not set" });
+    }
     const sig = req.headers["stripe-signature"] as string;
     let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("[Webhook] Signature verification failed:", message);
+      pushWebhookEvent({
+        id: "unknown",
+        type: "unknown",
+        timestamp: new Date().toISOString(),
+        signatureValid: false,
+        status: "invalid",
+      });
       return res.status(400).send(`Webhook Error: ${message}`);
     }
 
     // Handle test events
     if (event.id.startsWith("evt_test_")) {
+      pushWebhookEvent({
+        id: event.id,
+        type: event.type,
+        timestamp: new Date().toISOString(),
+        signatureValid: true,
+        status: "test",
+      });
       console.log("[Webhook] Test event detected, returning verification response");
       return res.json({ verified: true });
     }
 
+    pushWebhookEvent({
+      id: event.id,
+      type: event.type,
+      timestamp: new Date().toISOString(),
+      signatureValid: true,
+      status: "processed",
+    });
     console.log(`[Webhook] Event: ${event.type} | ID: ${event.id}`);
 
     try {

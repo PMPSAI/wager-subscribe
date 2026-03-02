@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { BarChart3, Megaphone, Target, Wallet, Zap, Webhook, LogOut, ChevronRight } from "lucide-react";
+import { BarChart3, Megaphone, Target, Wallet, Zap, Webhook, Settings, LogOut, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -12,6 +12,7 @@ const navItems = [
   { label: "Settlements", icon: Wallet, href: "/merchant/settlements" },
   { label: "Resolver", icon: Zap, href: "/merchant/resolver" },
   { label: "Webhook Test", icon: Webhook, href: "/merchant/webhook" },
+  { label: "Settings", icon: Settings, href: "/merchant/settings" },
 ];
 
 export default function MerchantLayout({ children }: { children: React.ReactNode }) {

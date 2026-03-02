@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { TRPCError } from "@trpc/server";
+import { getStripe } from "./stripe";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -29,6 +30,7 @@ import {
   getLedgerByUser,
   getMerchantKPIs,
   getOptionById,
+  pauseAllCampaigns,
   getOptionsByCampaign,
   getOrCreateRewardBalance,
   getResolutionByIntentId,
@@ -49,8 +51,7 @@ import {
 } from "./db";
 import { PLANS } from "./products";
 import { getConditionByKey, getConditionsForTier } from "./incentiveConditions";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-02-25.clover" });
+import { getWebhookEvents } from "./_core/webhookEvents";
 
 function requireAdmin(role: string) {
   if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
@@ -75,6 +76,15 @@ export const appRouter = router({
     createCheckoutSession: protectedProcedure
       .input(z.object({ planTier: z.enum(["starter", "pro", "elite"]) }))
       .mutation(async ({ ctx, input }) => {
+        let stripe: Stripe;
+        try {
+          stripe = getStripe();
+        } catch (err) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: err instanceof Error ? err.message : "Stripe is not configured",
+          });
+        }
         const plan = PLANS.find((p) => p.tier === input.planTier);
         if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid plan" });
         const origin = (ctx.req.headers.origin as string) || "http://localhost:3000";
@@ -126,6 +136,15 @@ export const appRouter = router({
     }),
 
     billingPortal: protectedProcedure.mutation(async ({ ctx }) => {
+      let stripe: Stripe;
+      try {
+        stripe = getStripe();
+      } catch (err) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: err instanceof Error ? err.message : "Stripe is not configured",
+        });
+      }
       if (!ctx.user.stripeCustomerId) throw new TRPCError({ code: "BAD_REQUEST", message: "No Stripe customer found" });
       const origin = (ctx.req.headers.origin as string) || "http://localhost:3000";
       const session = await stripe.billingPortal.sessions.create({
@@ -461,7 +480,7 @@ export const appRouter = router({
     kpis: protectedProcedure.query(async ({ ctx }) => {
       requireAdmin(ctx.user.role);
       const kpis = await getMerchantKPIs();
-      return kpis ?? {
+      const base = kpis ?? {
         intents7d: 0,
         intents30d: 0,
         totalResolutions: 0,
@@ -470,9 +489,24 @@ export const appRouter = router({
         awardsAppliedUsd: 0,
         awardsPendingUsd: 0,
         failedSettlements: 0,
+        retryQueueSize: 0,
         settlementSuccessRate: 0,
         lastResolverRun: null,
       };
+      return {
+        ...base,
+        stripeConnected: Boolean(process.env.STRIPE_SECRET_KEY),
+      };
+    }),
+    pauseAllCampaigns: protectedProcedure.mutation(async ({ ctx }) => {
+      requireAdmin(ctx.user.role);
+      await pauseAllCampaigns();
+      return { success: true, message: "All campaigns paused" };
+    }),
+
+    getWebhookEvents: protectedProcedure.query(async ({ ctx }) => {
+      requireAdmin(ctx.user.role);
+      return getWebhookEvents(50);
     }),
   }),
 

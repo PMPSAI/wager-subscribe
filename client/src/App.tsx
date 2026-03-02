@@ -14,6 +14,7 @@ import MerchantIntents from "./pages/merchant/MerchantIntents";
 import MerchantSettlements from "./pages/merchant/MerchantSettlements";
 import MerchantResolver from "./pages/merchant/MerchantResolver";
 import MerchantWebhook from "./pages/merchant/MerchantWebhook";
+import MerchantSettings from "./pages/merchant/MerchantSettings";
 import Terms from "./pages/Terms";
 
 function Router() {
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/merchant/settlements" component={MerchantSettlements} />
       <Route path="/merchant/resolver" component={MerchantResolver} />
       <Route path="/merchant/webhook" component={MerchantWebhook} />
+      <Route path="/merchant/settings" component={MerchantSettings} />
 
       {/* Legal */}
       <Route path="/terms" component={Terms} />

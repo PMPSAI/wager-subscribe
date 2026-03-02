@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   Campaign,
@@ -191,6 +191,13 @@ export async function updateCampaign(id: number, data: Partial<Campaign>) {
   const db = await getDb();
   if (!db) return;
   await db.update(campaigns).set({ ...data, updatedAt: new Date() }).where(eq(campaigns.id, id));
+}
+
+/** Set all campaigns to inactive (kill switch). */
+export async function pauseAllCampaigns(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(campaigns).set({ isActive: false, updatedAt: new Date() }).where(eq(campaigns.isActive, true));
 }
 
 // ─── Incentive Options ────────────────────────────────────────────────────────
@@ -418,6 +425,9 @@ export async function getMerchantKPIs() {
   const [appliedSettlements] = await db.select({ total: sql<number>`coalesce(sum(rewardValueUsd), 0)` }).from(settlements).where(eq(settlements.status, "APPLIED"));
   const [pendingSettlements] = await db.select({ total: sql<number>`coalesce(sum(rewardValueUsd), 0)` }).from(settlements).where(eq(settlements.status, "WIN_PENDING_ELIGIBILITY"));
   const [failedSettlements] = await db.select({ count: sql<number>`count(*)` }).from(settlements).where(eq(settlements.status, "FAILED_NEEDS_REVIEW"));
+  const [retryQueue] = await db.select({ count: sql<number>`count(*)` }).from(settlements).where(
+    inArray(settlements.status, ["WIN_PENDING_ELIGIBILITY", "FAILED_RETRYING"])
+  );
   const [totalSettlements] = await db.select({ count: sql<number>`count(*)` }).from(settlements);
   const [appliedCount] = await db.select({ count: sql<number>`count(*)` }).from(settlements).where(eq(settlements.status, "APPLIED"));
   const lastRun = await getLastResolverRun();
@@ -436,6 +446,7 @@ export async function getMerchantKPIs() {
     awardsAppliedUsd: Number(appliedSettlements?.total ?? 0),
     awardsPendingUsd: Number(pendingSettlements?.total ?? 0),
     failedSettlements: Number(failedSettlements?.count ?? 0),
+    retryQueueSize: Number(retryQueue?.count ?? 0),
     settlementSuccessRate: totalSett > 0 ? Math.round((appliedCnt / totalSett) * 100) : 0,
     lastResolverRun: lastRun ?? null,
   };

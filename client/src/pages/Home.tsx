@@ -66,9 +66,32 @@ export default function Home() {
                 {/* Admin-only Merchant Portal link */}
               </>
             ) : (
-              <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
-                Sign In <ArrowRight size={14} />
-              </Button>
+              <>
+                <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
+                  Sign In <ArrowRight size={14} />
+                </Button>
+                {import.meta.env.DEV && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const r = await fetch("/api/dev-login", { method: "GET", credentials: "include", redirect: "manual" });
+                        if (r.type === "opaqueredirect" || r.status === 0 || r.status === 302) {
+                          window.location.href = "/";
+                          return;
+                        }
+                        if (!r.ok) throw new Error(String(r.status));
+                        window.location.href = "/";
+                      } catch {
+                        window.location.href = `${window.location.origin}/api/dev-login`;
+                      }
+                    }}
+                  >
+                    Dev login (no DB)
+                  </Button>
+                )}
+              </>
             )}
           </nav>
         </div>

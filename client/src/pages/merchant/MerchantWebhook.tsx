@@ -1,12 +1,31 @@
 import MerchantLayout from "@/components/MerchantLayout";
+import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Webhook, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+
+function formatTimestamp(ts: string) {
+  try {
+    return new Date(ts).toLocaleString();
+  } catch {
+    return ts;
+  }
+}
 
 export default function MerchantWebhook() {
   const { user, isAuthenticated, loading } = useAuth();
@@ -14,6 +33,10 @@ export default function MerchantWebhook() {
   const [result, setResult] = useState<{ ok: boolean; body: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const [customerId, setCustomerId] = useState("");
+  const { data: webhookEvents = [], refetch: refetchEvents } = trpc.merchant.getWebhookEvents.useQuery(undefined, {
+    enabled: !!user && user.role === "admin",
+    refetchInterval: 5000,
+  });
 
   useEffect(() => {
     if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
@@ -43,8 +66,10 @@ export default function MerchantWebhook() {
       });
       const body = await res.text();
       setResult({ ok: res.ok, body });
-      if (res.ok) toast.success("Webhook delivered successfully");
-      else toast.error("Webhook returned an error");
+      if (res.ok) {
+        toast.success("Webhook delivered successfully");
+        refetchEvents();
+      } else toast.error("Webhook returned an error");
     } catch (e: any) {
       setResult({ ok: false, body: e.message });
       toast.error("Failed to send webhook");
@@ -66,14 +91,65 @@ export default function MerchantWebhook() {
   return (
     <MerchantLayout>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Webhook Test</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Simulate Stripe webhook events to test your integration</p>
+        <h1 className="text-2xl font-bold text-gray-900">Webhook Diagnostics</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Monitor recent Stripe webhook events and send test payloads</p>
       </div>
+
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Recent Events</CardTitle>
+          <CardDescription>Last 50 webhook events received (in-memory; resets on server restart).</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Event ID</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Timestamp</TableHead>
+                <TableHead>Signature</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {webhookEvents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-gray-500 py-8">
+                    No events yet. Send a test payload or wait for Stripe to deliver webhooks.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                webhookEvents.map((ev) => (
+                  <TableRow key={`${ev.id}-${ev.timestamp}`}>
+                    <TableCell className="font-mono text-xs text-gray-500">{ev.id}</TableCell>
+                    <TableCell className="font-mono text-xs">{ev.type}</TableCell>
+                    <TableCell className="text-gray-500 text-xs">{formatTimestamp(ev.timestamp)}</TableCell>
+                    <TableCell>
+                      {ev.signatureValid ? (
+                        <Badge variant="success" className="gap-1">
+                          <CheckCircle className="w-3 h-3" /> Valid
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive">Invalid</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={ev.status === "processed" || ev.status === "test" ? "success" : ev.status === "invalid" ? "destructive" : "secondary"}>
+                        {ev.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-2 gap-6">
         {/* Send test events */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Send Test Event</h2>
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Send Test Payload</h2>
           <div className="mb-4">
             <Label>Stripe Customer ID (optional)</Label>
             <Input value={customerId} onChange={e => setCustomerId(e.target.value)} placeholder="cus_..." className="mt-1" />

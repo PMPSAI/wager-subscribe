@@ -155,7 +155,14 @@ class SDKServer {
   }
 
   private getSessionSecret() {
-    const secret = ENV.cookieSecret;
+    let secret = ENV.cookieSecret;
+    if (!secret || secret.length === 0) {
+      if (process.env.NODE_ENV === "development") {
+        secret = "dev-session-secret-do-not-use-in-production";
+      } else {
+        throw new Error("JWT_SECRET must be set in production");
+      }
+    }
     return new TextEncoder().encode(secret);
   }
 
@@ -256,6 +263,26 @@ class SDKServer {
     } as GetUserInfoWithJwtResponse;
   }
 
+  /**
+   * Dummy user for localhost when no DB or OAuth is available (development only).
+   * Uses a fixed id so DB queries by userId return empty when DB is not connected.
+   */
+  private getDummyUser(openId: string): User {
+    const now = new Date();
+    return {
+      id: 1,
+      openId,
+      name: "Dev User",
+      email: "dev@localhost",
+      loginMethod: "dev",
+      role: "admin",
+      stripeCustomerId: null,
+      createdAt: now,
+      updatedAt: now,
+      lastSignedIn: now,
+    };
+  }
+
   async authenticateRequest(req: Request): Promise<User> {
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
@@ -284,11 +311,18 @@ class SDKServer {
         user = await db.getUserByOpenId(userInfo.openId);
       } catch (error) {
         console.error("[Auth] Failed to sync user from OAuth:", error);
+        // On localhost with no DB/OAuth, allow dummy auth so dev can use the app
+        if (process.env.NODE_ENV === "development") {
+          return this.getDummyUser(sessionUserId);
+        }
         throw ForbiddenError("Failed to sync user info");
       }
     }
 
     if (!user) {
+      if (process.env.NODE_ENV === "development") {
+        return this.getDummyUser(sessionUserId);
+      }
       throw ForbiddenError("User not found");
     }
 
