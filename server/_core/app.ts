@@ -47,8 +47,9 @@ export async function createApp(): Promise<Express> {
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
+    // On Vercel Build Output API v3, static files are at process.cwd()/public inside the function.
     const distPath = process.env.VERCEL
-      ? path.join(process.cwd(), "dist", "public")
+      ? path.join(process.cwd(), "public")
       : path.resolve(import.meta.dirname ?? __dirname, "public");
     app.use(express.static(distPath));
     app.get("*", (_req, res) => {

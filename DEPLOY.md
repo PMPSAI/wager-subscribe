@@ -30,9 +30,9 @@ The app uses **MySQL** (Drizzle + mysql2). Use one of:
 2. **Add New** → **Project** → import your `wager-subscribe` repo.
 3. **Configure:**
    - **Framework Preset:** Other
-   - **Build Command:** `npm run build` (default)
-   - **Output Directory:** leave empty (the API serves the app and static files)
-   - **Install Command:** `npm install`
+   - **Build Command:** `pnpm run build` (or use Override if needed; see Troubleshooting)
+   - **Output Directory:** `.vercel/output` (Build Output API v3; set in `vercel.json`)
+   - **Install Command:** `pnpm install --frozen-lockfile` (from `vercel.json`)
 
 4. **Environment variables** (Project → Settings → Environment Variables). Add:
 
@@ -49,7 +49,7 @@ The app uses **MySQL** (Drizzle + mysql2). Use one of:
 
    Set them for **Production** (and **Preview** if you want).
 
-5. **Deploy** – Vercel will run `npm run build` and deploy. The single serverless function at `api/handler.mjs` handles all routes (API + SPA).
+5. **Deploy** – Vercel runs `pnpm run build`, which produces `.vercel/output` (Build Output API v3). Static assets are served from `static/`; all other routes (including `/` and `/api/*`) are handled by the `render` serverless function so the SPA and API work correctly.
 
 ## 4. Run database migrations
 

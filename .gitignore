@@ -5,7 +5,9 @@
 # Build outputs
 dist/
 build/
+.vercel/
 *.dist
+api/index.mjs
 
 # Environment variables
 .env
