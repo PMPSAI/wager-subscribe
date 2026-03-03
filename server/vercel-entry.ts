@@ -2,6 +2,8 @@ import type { Express } from "express";
 import type { IncomingMessage, ServerResponse } from "http";
 import { createApp } from "./_core/app";
 
+export const maxDuration = 30;
+
 let appPromise: Promise<Express> | null = null;
 
 function getApp(): Promise<Express> {
