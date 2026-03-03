@@ -3,6 +3,11 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm run build",
   "rewrites": [{ "source": "/(.*)", "destination": "/api/handler" }],
+  "functions": {
+    "api/handler.mjs": {
+      "includeFiles": "dist/public/**"
+    }
+  },
   "env": {
     "NODE_ENV": "production"
   }
