@@ -49,7 +49,7 @@ The app uses **MySQL** (Drizzle + mysql2). Use one of:
 
    Set them for **Production** (and **Preview** if you want).
 
-5. **Deploy** – Vercel will run `npm run build` and deploy. The single serverless function at `api/index.mjs` handles all routes (API + SPA).
+5. **Deploy** – Vercel will run `npm run build` and deploy. The single serverless function at `api/handler.mjs` handles all routes (API + SPA).
 
 ## 4. Run database migrations
 

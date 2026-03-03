@@ -14,9 +14,9 @@ await esbuild.build({
   platform: "node",
   format: "esm",
   packages: "external",
-  outfile: path.join(root, "api", "index.mjs"),
+  outfile: path.join(root, "api", "handler.mjs"),
   alias: {
     "@shared": path.join(root, "shared"),
   },
 });
-console.log("Built api/index.mjs for Vercel");
+console.log("Built api/handler.mjs for Vercel");
