@@ -160,7 +160,10 @@ class SDKServer {
       if (process.env.NODE_ENV === "development") {
         secret = "dev-session-secret-do-not-use-in-production";
       } else {
-        throw new Error("JWT_SECRET must be set in production");
+        // Don't throw: missing JWT_SECRET would crash the serverless function (e.g. on Vercel).
+        // Use a placeholder so verifySession fails and returns null; auth then treats user as unauthenticated.
+        console.warn("[Auth] JWT_SECRET not set in production; sessions will be invalid.");
+        secret = "production-placeholder-set-JWT_SECRET";
       }
     }
     return new TextEncoder().encode(secret);

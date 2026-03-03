@@ -75,6 +75,11 @@ In the Vercel project: **Settings** → **Domains** → add your domain and foll
 
 ## Troubleshooting
 
+- **"A server error has occurred" / FUNCTION_INVOCATION_FAILED**  
+  Often caused by missing or invalid env on Vercel. The app is built to avoid crashing when the DB is unavailable: `auth.me` will return `null` and the UI will load. For full functionality you must set at least:
+  - **`DATABASE_URL`** – MySQL connection string (e.g. PlanetScale). If missing, DB features (users, subscriptions, etc.) won’t work.
+  - **`JWT_SECRET`** – A long random string (32+ chars). If missing, session cookies are invalid and sign-in won’t persist; set it in Vercel → Project → Settings → Environment Variables for Production and Preview, then redeploy.
+
 - **"pnpm install" / "frozen-lockfile" / ERR_PNPM_OUTDATED_LOCKFILE**  
   Vercel picks the package manager from the lockfile in the repo; if it sees `pnpm-lock.yaml` (e.g. on an old commit), it runs pnpm and ignores `vercel.json`’s `installCommand`. So you must use the **Override** in project settings. If the build log shows an old commit (e.g. `6b6ea19`), ensure your latest code is pushed to the GitHub repo Vercel is connected to.  
   1. In Vercel, open the deployment and check the commit hash; if it’s not your latest `main`, trigger a **new deploy** from the latest commit (e.g. **Redeploy** with “Use existing Build Cache” **off**).  

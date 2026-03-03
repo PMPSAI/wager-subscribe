@@ -52,8 +52,14 @@ export async function createApp(): Promise<Express> {
       ? path.join(process.cwd(), "public")
       : path.resolve(import.meta.dirname ?? __dirname, "public");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    app.get("*", (_req, res, next) => {
+      const indexHtml = path.join(distPath, "index.html");
+      res.sendFile(indexHtml, (err) => {
+        if (err) {
+          console.warn("[App] sendFile failed:", err.message);
+          res.status(500).json({ error: "Static assets not found (check deployment)." });
+        }
+      });
     });
   }
 

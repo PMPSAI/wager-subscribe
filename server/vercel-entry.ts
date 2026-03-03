@@ -8,7 +8,13 @@ export const maxDuration = 30;
 let appPromise: Promise<Express> | null = null;
 
 function getApp(): Promise<Express> {
-  if (!appPromise) appPromise = createApp();
+  if (!appPromise) {
+    appPromise = createApp().catch((err) => {
+      console.error("[Vercel] createApp failed:", err);
+      appPromise = null; // allow retry on next request
+      throw err;
+    });
+  }
   return appPromise;
 }
 
@@ -39,7 +45,16 @@ function headersToObject(headers: Headers): Record<string, string> {
 
 /** Convert Web Request to Node-like IncomingMessage and run Express; return Web Response. */
 async function handleFetchRequest(request: Request): Promise<Response> {
-  const app = await getApp();
+  let app: Express;
+  try {
+    app = await getApp();
+  } catch (err) {
+    console.error("[Vercel] getApp error:", err);
+    return new Response(
+      JSON.stringify({ error: "Server configuration error", detail: "App failed to start (check env: DATABASE_URL, JWT_SECRET)." }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
   const url = request.url;
   const method = request.method;
@@ -152,7 +167,9 @@ async function handleFetchRequest(request: Request): Promise<Response> {
       (app as (req: IncomingMessage, res: ServerResponse) => void)(req, res);
     } catch (err) {
       console.error("[Vercel] Express invocation error:", err);
-      reject(err);
+      statusCode = 500;
+      (res as any).setHeader("Content-Type", "application/json");
+      endResponse(JSON.stringify({ error: "A server error has occurred", message: err instanceof Error ? err.message : String(err) }));
     }
   });
 }
