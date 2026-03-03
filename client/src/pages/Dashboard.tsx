@@ -10,6 +10,80 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+/** Mock user when not logged in so dashboard can render with demo data. */
+const MOCK_USER = {
+  id: 0,
+  openId: "demo",
+  name: "Guest",
+  email: "guest@demo",
+  loginMethod: "demo",
+  role: "user" as const,
+  stripeCustomerId: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  lastSignedIn: new Date(),
+};
+
+/** Mock dashboard summary for unauthenticated / demo mode. */
+const MOCK_SUMMARY = {
+  subscription: null as any,
+  incentives: [],
+  intents: [
+    {
+      id: 1,
+      userId: 0,
+      incentiveOptionId: 1,
+      campaignId: 1,
+      transactionId: null,
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+      termsSnapshot: {
+        conditionLabel: "Bitcoin Reaches $100,000",
+        conditionDescription: "BTC price closes at or above $100,000 USD within 30 days.",
+        rewardValueUsd: 9,
+      },
+      status: "TRACKING",
+      resolveAt: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      userId: 0,
+      incentiveOptionId: 2,
+      campaignId: 1,
+      transactionId: null,
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+      termsSnapshot: {
+        conditionLabel: "S&P 500 Gains 5%",
+        conditionDescription: "S&P 500 closes at least 5% higher within 30 days.",
+        rewardValueUsd: 9,
+      },
+      status: "RESOLVED_WIN",
+      resolveAt: new Date().toISOString(),
+      createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+  balance: { remainderUsd: "2.50", monthsAwardedLast365d: "0", windowStartedAt: new Date(), updatedAt: new Date(), id: 0, userId: 0 },
+  ledger: [
+    { id: 1, userId: 0, intentId: 2, settlementId: null, eventType: "WIN_APPLIED", amountUsd: "2.50", description: "Reward applied: $2.50 USD", metadata: null, createdAt: new Date().toISOString() },
+  ],
+  stats: {
+    total: 2,
+    pending: 0,
+    achieved: 0,
+    notAchieved: 0,
+    totalRewardCents: 0,
+    totalIntents: 2,
+    trackingIntents: 1,
+    wonIntents: 1,
+    remainderUsd: 2.5,
+    monthsAwardedLast365d: 0,
+  },
+};
+
 function Countdown({ to }: { to: Date | string }) {
   const target = new Date(to).getTime();
   const [remaining, setRemaining] = useState(target - Date.now());
@@ -70,16 +144,14 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
 }
 
 export default function Dashboard() {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { user: authUser, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
 
-  useEffect(() => {
-    if (!loading && !isAuthenticated) navigate("/");
-  }, [loading, isAuthenticated]);
+  const user = authUser ?? MOCK_USER;
+  const isDemoMode = !authUser;
 
-  const utils = trpc.useUtils();
-  const { data, isLoading, refetch } = trpc.dashboard.summary.useQuery(undefined, {
-    enabled: !!user,
+  const { data: liveData, isLoading, refetch } = trpc.dashboard.summary.useQuery(undefined, {
+    enabled: !!authUser,
     refetchInterval: 30000,
   });
 
@@ -88,7 +160,21 @@ export default function Dashboard() {
     onError: (e) => toast.error(e.message),
   });
 
-  if (loading || !user) {
+  const data = isDemoMode ? MOCK_SUMMARY : liveData;
+  const stats = data?.stats;
+  const intents = data?.intents ?? [];
+  const balance = data?.balance;
+  const ledger = data?.ledger ?? [];
+  const subscription = data?.subscription;
+
+  if (loading && !isDemoMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+  if (authUser && isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full" />
@@ -96,29 +182,16 @@ export default function Dashboard() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center max-w-sm">
-          <Target className="w-10 h-10 text-emerald-600 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Sign in to view your dashboard</h2>
-          <p className="text-gray-500 text-sm mb-5">Track your incentives, subscriptions, and rewards.</p>
-          <Button onClick={() => (window.location.href = getLoginUrl())} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
-            Sign In
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  const stats = data?.stats;
-  const intents = data?.intents ?? [];
-  const balance = data?.balance;
-  const ledger = data?.ledger ?? [];
-  const subscription = data?.subscription;
-
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
+      {isDemoMode && (
+        <div className="bg-amber-100 border-b border-amber-200 px-4 py-2 flex items-center justify-center gap-2 text-sm text-amber-800">
+          <span>Viewing with demo data.</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs border-amber-300 text-amber-800 hover:bg-amber-200" onClick={() => (window.location.href = getLoginUrl())}>
+            Sign in to see your real dashboard
+          </Button>
+        </div>
+      )}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -128,19 +201,27 @@ export default function Dashboard() {
             <span className="font-semibold text-gray-900 text-sm">IncentivPay</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">Welcome back, {user.name?.split(" ")[0]}</span>
-            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => refetch()}>
-              <RefreshCw className="w-3 h-3" /> Refresh
-            </Button>
+            <span className="text-sm text-gray-500">Welcome back, {user.name?.split(" ")[0] ?? "Guest"}</span>
+            {authUser && (
+              <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => refetch()}>
+                <RefreshCw className="w-3 h-3" /> Refresh
+              </Button>
+            )}
             <Link href="/plans">
               <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
                 <Plus className="w-3 h-3" /> New Plan
               </Button>
             </Link>
-            {user.role === "admin" && (
-              <Link href="/merchant">
-                <Button size="sm" variant="outline" className="h-8 text-xs">Merchant Portal</Button>
-              </Link>
+            {isDemoMode ? (
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => (window.location.href = getLoginUrl())}>
+                Sign In
+              </Button>
+            ) : (
+              user.role === "admin" && (
+                <Link href="/merchant">
+                  <Button size="sm" variant="outline" className="h-8 text-xs">Merchant Portal</Button>
+                </Link>
+              )
             )}
           </div>
         </div>
@@ -172,12 +253,14 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <Button size="sm" variant="outline" className="text-xs h-8"
-              disabled={billingPortalMutation.isPending}
-              onClick={() => billingPortalMutation.mutate()}
-            >
-              Manage Billing
-            </Button>
+            {authUser && (
+              <Button size="sm" variant="outline" className="text-xs h-8"
+                disabled={billingPortalMutation.isPending}
+                onClick={() => billingPortalMutation.mutate()}
+              >
+                Manage Billing
+              </Button>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-xl border-2 border-dashed border-gray-200 p-8 mb-6 text-center">

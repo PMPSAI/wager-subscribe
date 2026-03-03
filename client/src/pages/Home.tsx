@@ -67,6 +67,9 @@ export default function Home() {
               </>
             ) : (
               <>
+                <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")} className="gap-1.5">
+                  View Dashboard
+                </Button>
                 <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
                   Sign In <ArrowRight size={14} />
                 </Button>
