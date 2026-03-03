@@ -72,3 +72,10 @@ Or use PlanetScale’s deploy requests / branching to run migrations in their UI
 ## 6. (Optional) Custom domain
 
 In the Vercel project: **Settings** → **Domains** → add your domain and follow the DNS steps.
+
+## Troubleshooting
+
+- **"pnpm install" / "frozen-lockfile" / ERR_PNPM_OUTDATED_LOCKFILE**  
+  Vercel picks the package manager from the lockfile in the repo; if it sees `pnpm-lock.yaml` (e.g. on an old commit), it runs pnpm and ignores `vercel.json`’s `installCommand`. So you must use the **Override** in project settings. If the build log shows an old commit (e.g. `6b6ea19`), ensure your latest code is pushed to the GitHub repo Vercel is connected to.  
+  1. In Vercel, open the deployment and check the commit hash; if it’s not your latest `main`, trigger a **new deploy** from the latest commit (e.g. **Redeploy** with “Use existing Build Cache” **off**).  
+  2. If it keeps using pnpm, in the project go to **Settings** → **Build & Development** → **Install Command**, turn the **Override** toggle **ON**, and set the command to `rm -f pnpm-lock.yaml && npm ci`. Then **push a new commit** to `main` (e.g. `git commit --allow-empty -m "chore: trigger deploy" && git push`) so the next build uses the override—do not only click Redeploy on an old deployment.
