@@ -222,9 +222,13 @@ class SDKServer {
       });
       const { openId, appId, name } = payload as Record<string, unknown>;
 
+      // appId is only required when OAuth is configured. In simple-login mode
+      // (no OAUTH_SERVER_URL / VITE_APP_ID), the JWT is issued with appId: ""
+      // which is perfectly valid — we only need openId and name.
+      const requireAppId = !!ENV.oAuthServerUrl;
       if (
         !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
+        (requireAppId && !isNonEmptyString(appId)) ||
         !isNonEmptyString(name)
       ) {
         console.warn("[Auth] Session payload missing required fields");
@@ -232,9 +236,9 @@ class SDKServer {
       }
 
       return {
-        openId,
-        appId,
-        name,
+        openId: openId as string,
+        appId: (appId as string) ?? "",
+        name: name as string,
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
