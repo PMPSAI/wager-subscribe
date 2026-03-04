@@ -7,4 +7,8 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  /** When set (e.g. "1" or "true"), GET /api/simple-login signs in without OAuth. */
+  enableSimpleLogin: process.env.ENABLE_SIMPLE_LOGIN === "1" || process.env.ENABLE_SIMPLE_LOGIN === "true",
+  simpleLoginEmail: process.env.SIMPLE_LOGIN_EMAIL ?? "demo@local",
+  simpleLoginName: process.env.SIMPLE_LOGIN_NAME ?? "Demo User",
 };

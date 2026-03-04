@@ -10,6 +10,8 @@ import { createContext } from "./context";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 import { serveStatic, setupVite } from "./vite";
+import { ENV } from "./env";
+import * as db from "../db";
 
 /**
  * Creates the Express app (used by both standalone server and Vercel serverless).
@@ -23,6 +25,39 @@ export async function createApp(): Promise<Express> {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerOAuthRoutes(app);
+
+  app.get("/api/auth/methods", (_req, res) => {
+    res.json({
+      oauth: !!(ENV.oAuthServerUrl && ENV.appId),
+      simpleLogin: ENV.enableSimpleLogin,
+    });
+  });
+
+  if (ENV.enableSimpleLogin) {
+    app.get("/api/simple-login", async (req, res) => {
+      const openId = `simple-login-${ENV.simpleLoginEmail}`;
+      const now = new Date();
+      try {
+        await db.upsertUser({
+          openId,
+          name: ENV.simpleLoginName,
+          email: ENV.simpleLoginEmail,
+          loginMethod: "simple",
+          lastSignedIn: now,
+        });
+        const token = await sdk.createSessionToken(openId, {
+          name: ENV.simpleLoginName,
+          expiresInMs: ONE_YEAR_MS,
+        });
+        const cookieOptions = getSessionCookieOptions(req);
+        res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        res.redirect(302, "/");
+      } catch (err) {
+        console.error("[SimpleLogin] Failed:", err);
+        res.status(500).json({ error: "Simple login failed" });
+      }
+    });
+  }
 
   if (process.env.NODE_ENV === "development") {
     app.get("/api/dev-login", async (req, res) => {

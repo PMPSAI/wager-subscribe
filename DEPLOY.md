@@ -46,8 +46,13 @@ The app uses **MySQL** (Drizzle + mysql2). Use one of:
    | `OAUTH_SERVER_URL` | OAuth API base URL (if using OAuth) | `https://auth.example.com` |
    | `VITE_OAUTH_PORTAL_URL` | OAuth login portal URL (if using OAuth) | `https://login.example.com` |
    | `OWNER_OPEN_ID` | (Optional) OpenID of the admin user | openid-string |
+   | `ENABLE_SIMPLE_LOGIN` | (Optional) Set to `1` or `true` to allow sign-in without OAuth via **Sign in without OAuth** | `1` |
+   | `SIMPLE_LOGIN_EMAIL` | (Optional) Email for the simple-login user when `ENABLE_SIMPLE_LOGIN` is set | `demo@local` |
+   | `SIMPLE_LOGIN_NAME` | (Optional) Display name for the simple-login user | `Demo User` |
 
    Set them for **Production** (and **Preview** if you want).
+
+   **Sign-in options:** If you set `ENABLE_SIMPLE_LOGIN=1`, the app shows a **Sign in without OAuth** button that creates a session (and a user in the DB) without any OAuth provider. Use this when you don’t have OAuth configured. You can use both: OAuth and simple login can be enabled at the same time; the nav shows both buttons when both are configured.
 
 5. **Deploy** – Vercel runs `pnpm run build`, which produces `.vercel/output` (Build Output API v3). Static assets are served from `static/`; all other routes (including `/` and `/api/*`) are handled by the `render` serverless function so the SPA and API work correctly.
 

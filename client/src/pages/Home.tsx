@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuthMethods } from "@/_core/hooks/useAuthMethods";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,7 @@ const FEATURES = [
 
 export default function Home() {
   const { isAuthenticated } = useAuth();
+  const { oauth, simpleLogin } = useAuthMethods();
   const [, navigate] = useLocation();
 
   return (
@@ -70,9 +72,16 @@ export default function Home() {
                 <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")} className="gap-1.5">
                   View Dashboard
                 </Button>
-                <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
-                  Sign In <ArrowRight size={14} />
-                </Button>
+                {simpleLogin && (
+                  <Button size="sm" variant="outline" onClick={() => (window.location.href = `${window.location.origin}/api/simple-login`)} className="gap-1.5">
+                    Sign in without OAuth
+                  </Button>
+                )}
+                {oauth && (
+                  <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
+                    Sign In (OAuth) <ArrowRight size={14} />
+                  </Button>
+                )}
                 {import.meta.env.DEV && (
                   <Button
                     size="sm"
@@ -91,7 +100,7 @@ export default function Home() {
                       }
                     }}
                   >
-                    Dev login (no DB)
+                    Dev login
                   </Button>
                 )}
               </>
