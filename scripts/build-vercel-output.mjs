@@ -29,16 +29,45 @@ await esbuild.build({
   bundle: true,
   platform: "node",
   format: "esm",
-  packages: "external",
-  // Explicitly mark dev-only packages as external even when bundling is on.
-  // esbuild's `packages: "external"` covers node_modules, but relative imports
-  // like vite.config.ts get inlined.  We prevent that here.
+  // Do NOT use `packages: "external"` — that would externalize drizzle-orm,
+  // @neondatabase/serverless, stripe, etc. which are not available in the
+  // Vercel function runtime.  Instead, bundle everything and only mark
+  // dev-only build tools as external (they are never required at runtime).
   external: [
+    // Dev-only Vite build tools — never required at Vercel runtime
     "vite",
     "vite-plugin-manus-runtime",
     "@vitejs/plugin-react",
     "@tailwindcss/vite",
     "@builder.io/vite-plugin-jsx-loc",
+    // Node built-ins (always available in Node.js runtime)
+    "node:*",
+    "crypto",
+    "fs",
+    "path",
+    "os",
+    "http",
+    "https",
+    "net",
+    "tls",
+    "stream",
+    "util",
+    "events",
+    "buffer",
+    "url",
+    "querystring",
+    "zlib",
+    "child_process",
+    "worker_threads",
+    "perf_hooks",
+    "async_hooks",
+    "dns",
+    "assert",
+    "readline",
+    "string_decoder",
+    "timers",
+    "module",
+    "vm",
   ],
   // Ignore the vite.config file when bundling for production.
   plugins: [
