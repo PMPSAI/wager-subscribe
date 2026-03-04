@@ -19,13 +19,45 @@ if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
 fs.mkdirSync(staticDir, { recursive: true });
 fs.mkdirSync(funcDir, { recursive: true });
 
-// 1. Build serverless handler from vercel-entry (same as api/handler.mjs)
+// 1. Build serverless handler from vercel-entry.
+//    Mark vite and all dev-only build plugins as external so they are NEVER
+//    bundled into the production function.  setupVite() is only called in
+//    development (NODE_ENV=development), so these packages are never required
+//    at Vercel runtime and their absence must not cause ERR_MODULE_NOT_FOUND.
 await esbuild.build({
   entryPoints: [path.join(root, "server", "vercel-entry.ts")],
   bundle: true,
   platform: "node",
   format: "esm",
   packages: "external",
+  // Explicitly mark dev-only packages as external even when bundling is on.
+  // esbuild's `packages: "external"` covers node_modules, but relative imports
+  // like vite.config.ts get inlined.  We prevent that here.
+  external: [
+    "vite",
+    "vite-plugin-manus-runtime",
+    "@vitejs/plugin-react",
+    "@tailwindcss/vite",
+    "@builder.io/vite-plugin-jsx-loc",
+  ],
+  // Ignore the vite.config file when bundling for production.
+  plugins: [
+    {
+      name: "ignore-vite-config",
+      setup(build) {
+        // Redirect any import of vite.config.ts to an empty stub so it is
+        // never bundled into the production function.
+        build.onResolve({ filter: /vite\.config/ }, () => ({
+          path: "vite-config-stub",
+          namespace: "ignore-vite-config",
+        }));
+        build.onLoad({ filter: /.*/, namespace: "ignore-vite-config" }, () => ({
+          contents: "export default {};",
+          loader: "js",
+        }));
+      },
+    },
+  ],
   outfile: path.join(funcDir, "index.mjs"),
   alias: { "@shared": path.join(root, "shared") },
 });

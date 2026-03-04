@@ -1,12 +1,23 @@
+/**
+ * Vite dev-server integration.
+ *
+ * ALL Vite / plugin imports are done lazily inside setupVite() so that
+ * esbuild does NOT include them as external references in the production
+ * bundle.  On Vercel, NODE_ENV=production so setupVite is never called,
+ * meaning the dynamic import() calls are never reached and the missing
+ * dev-only packages never cause ERR_MODULE_NOT_FOUND.
+ */
 import express, { type Express } from "express";
 import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
 
 export async function setupVite(app: Express, server: Server) {
+  // Lazy-load Vite and plugins so the production bundle stays clean.
+  const { createServer: createViteServer } = await import("vite");
+  const { default: viteConfig } = await import("../../vite.config");
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },

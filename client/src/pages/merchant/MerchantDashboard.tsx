@@ -138,7 +138,7 @@ export default function MerchantDashboard() {
               <span className="text-sm text-gray-500">Failed Settlements</span>
               {(kpis?.failedSettlements ?? 0) > 0 ? (
                 <span className="text-sm font-medium text-red-600 flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4" /> {kpis.failedSettlements}
+                  <AlertCircle className="w-4 h-4" /> {kpis?.failedSettlements ?? 0}
                 </span>
               ) : (
                 <span className="text-sm font-medium text-gray-900">0</span>

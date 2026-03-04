@@ -69,7 +69,31 @@ vi.mock("./db", () => ({
   getDb: vi.fn().mockResolvedValue(null),
 }));
 
-// Mock Stripe
+// Mock the ./stripe module so getStripe() doesn't require STRIPE_SECRET_KEY in tests
+vi.mock("./stripe", () => ({
+  getStripe: vi.fn().mockReturnValue({
+    checkout: {
+      sessions: {
+        create: vi.fn().mockResolvedValue({
+          id: "cs_test_123",
+          url: "https://checkout.stripe.com/test",
+        }),
+      },
+    },
+    billingPortal: {
+      sessions: {
+        create: vi.fn().mockResolvedValue({ url: "https://billing.stripe.com/portal" }),
+      },
+    },
+    subscriptions: {
+      retrieve: vi.fn().mockResolvedValue({
+        items: { data: [{ price: { id: "price_test" }, current_period_end: 9999999999 }] },
+      }),
+    },
+  }),
+}));
+
+// Mock Stripe package (for direct imports)
 vi.mock("stripe", () => {
   const Stripe = vi.fn().mockImplementation(() => ({
     checkout: {

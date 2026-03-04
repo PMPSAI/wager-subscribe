@@ -27,6 +27,35 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+// ─── Merchants ────────────────────────────────────────────────────────────────
+// Represents a merchant (business) that uses IncentivSubscribe.
+// Each merchant has their own Stripe Connect account, campaigns, and tenant
+// isolation.  The owning user is tracked via userId for RBAC.
+export const merchants = mysqlTable("merchants", {
+  id: int("id").autoincrement().primaryKey(),
+  /** The platform user who owns / administers this merchant account. */
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 128 }).notNull().unique(),
+  /** Stripe Connect account ID (set after OAuth). */
+  stripeAccountId: varchar("stripeAccountId", { length: 128 }),
+  /** Stripe Connect OAuth access token (encrypted at rest in production). */
+  stripeAccessToken: text("stripeAccessToken"),
+  /** Stripe Connect refresh token. */
+  stripeRefreshToken: text("stripeRefreshToken"),
+  /** Stripe publishable key for the connected account. */
+  stripePublishableKey: varchar("stripePublishableKey", { length: 128 }),
+  /** Stripe webhook endpoint ID registered for this merchant. */
+  stripeWebhookEndpointId: varchar("stripeWebhookEndpointId", { length: 128 }),
+  /** Stripe webhook signing secret for this merchant. */
+  stripeWebhookSecret: text("stripeWebhookSecret"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Merchant = typeof merchants.$inferSelect;
+export type InsertMerchant = typeof merchants.$inferInsert;
+
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 export const subscriptions = mysqlTable("subscriptions", {
   id: int("id").autoincrement().primaryKey(),
@@ -64,15 +93,26 @@ export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = typeof transactions.$inferInsert;
 
 // ─── Campaigns ────────────────────────────────────────────────────────────────
+// A Campaign belongs to a Merchant (multi-tenant).  The merchantId column
+// enables tenant isolation — all queries should filter by merchantId.
 export const campaigns = mysqlTable("campaigns", {
   id: int("id").autoincrement().primaryKey(),
+  /** Tenant isolation: which merchant owns this campaign. */
+  merchantId: int("merchantId"),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
+  /** Stripe Price IDs that activate this campaign at checkout. */
   stripePriceIds: json("stripePriceIds").$type<string[]>().notNull(),
   maxSelections: int("maxSelections").default(1).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   termsText: text("termsText"),
   riskLimitUsd: decimal("riskLimitUsd", { precision: 10, scale: 2 }),
+  /** Weekly resolution schedule — cron expression (default: weekly on Monday). */
+  resolutionCron: varchar("resolutionCron", { length: 64 }).default("0 0 9 * * 1"),
+  /** Hard cap: max months that can be awarded per rolling 365-day window. */
+  capMonthsPer365d: int("capMonthsPer365d").default(12).notNull(),
+  /** Claim window in days after a WIN resolution. */
+  claimWindowDays: int("claimWindowDays").default(7).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -89,7 +129,8 @@ export const incentiveOptions = mysqlTable("incentiveOptions", {
   category: mysqlEnum("category", ["market", "economy", "sports", "custom"]).notNull(),
   rewardValueUsd: decimal("rewardValueUsd", { precision: 10, scale: 2 }).notNull(),
   rewardLabel: varchar("rewardLabel", { length: 255 }),
-  resolutionWindowDays: int("resolutionWindowDays").default(30).notNull(),
+  /** Legacy field — kept for backward compat; use campaign.claimWindowDays instead. */
+  resolutionWindowDays: int("resolutionWindowDays").default(7).notNull(),
   dataSource: varchar("dataSource", { length: 255 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -99,6 +140,12 @@ export type IncentiveOption = typeof incentiveOptions.$inferSelect;
 export type InsertIncentiveOption = typeof incentiveOptions.$inferInsert;
 
 // ─── Intents ──────────────────────────────────────────────────────────────────
+// An Intent is created when a customer selects an incentive option after
+// checkout.  The termsSnapshot is locked at creation time and is immutable.
+//
+// Status machine:
+//   CREATED → TRACKING → PENDING_RESOLUTION → RESOLVED_WIN | RESOLVED_LOSS
+//                                           ↘ CANCELLED | ERROR
 export const intents = mysqlTable("intents", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -107,6 +154,7 @@ export const intents = mysqlTable("intents", {
   incentiveOptionId: int("incentiveOptionId").notNull(),
   stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
   stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  /** Immutable snapshot of the option terms locked at intent creation. */
   termsSnapshot: json("termsSnapshot").$type<{
     conditionKey: string;
     conditionLabel: string;
@@ -135,10 +183,12 @@ export type Intent = typeof intents.$inferSelect;
 export type InsertIntent = typeof intents.$inferInsert;
 
 // ─── Resolutions ──────────────────────────────────────────────────────────────
+// Immutable record written by the weekly resolver job.
 export const resolutions = mysqlTable("resolutions", {
   id: int("id").autoincrement().primaryKey(),
   intentId: int("intentId").notNull().unique(),
   outcome: mysqlEnum("outcome", ["WIN", "LOSS"]).notNull(),
+  /** Proof / evidence JSON from the data source. */
   proofJson: json("proofJson").$type<Record<string, unknown>>(),
   resolvedAt: timestamp("resolvedAt").defaultNow().notNull(),
   resolverRunId: int("resolverRunId"),
@@ -147,6 +197,17 @@ export type Resolution = typeof resolutions.$inferSelect;
 export type InsertResolution = typeof resolutions.$inferInsert;
 
 // ─── Settlements ──────────────────────────────────────────────────────────────
+// Tracks the application of a WIN reward to a Stripe subscription.
+//
+// Status machine:
+//   PENDING → APPLIED
+//           → WIN_PENDING_ELIGIBILITY (subscription not active at resolution)
+//               → APPLIED (after grace window + retry)
+//               → FAILED_NEEDS_REVIEW (after N retries)
+//           → CAP_REACHED
+//           → EXPIRED_UNCLAIMED
+//           → REVERSED
+//           → FAILED_RETRYING → FAILED_NEEDS_REVIEW
 export const settlements = mysqlTable("settlements", {
   id: int("id").autoincrement().primaryKey(),
   intentId: int("intentId").notNull(),
@@ -164,7 +225,9 @@ export const settlements = mysqlTable("settlements", {
   rewardValueUsd: decimal("rewardValueUsd", { precision: 10, scale: 2 }),
   rewardBalanceUsdBefore: decimal("rewardBalanceUsdBefore", { precision: 10, scale: 2 }).default("0"),
   currentPlanPriceUsd: decimal("currentPlanPriceUsd", { precision: 10, scale: 2 }),
+  /** floor((rewardValueUsd + remainderBalanceBefore) / currentPlanPriceUsd) */
   monthsToDefer: int("monthsToDefer"),
+  /** (rewardValueUsd + remainderBalanceBefore) - (monthsToDefer * currentPlanPriceUsd) */
   remainderBalanceUsd: decimal("remainderBalanceUsd", { precision: 10, scale: 2 }),
   nextInvoiceDateBefore: timestamp("nextInvoiceDateBefore"),
   nextInvoiceDateAfter: timestamp("nextInvoiceDateAfter"),
@@ -172,8 +235,10 @@ export const settlements = mysqlTable("settlements", {
   attempts: int("attempts").default(0).notNull(),
   lastAttemptAt: timestamp("lastAttemptAt"),
   lastError: text("lastError"),
+  /** Expiry of the 7-day grace window for WIN_PENDING_ELIGIBILITY. */
   eligibilityClaimExpiresAt: timestamp("eligibilityClaimExpiresAt"),
   appliedAt: timestamp("appliedAt"),
+  /** Idempotency key to prevent duplicate settlement applications. */
   idempotencyKey: varchar("idempotencyKey", { length: 128 }).unique(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -182,6 +247,7 @@ export type Settlement = typeof settlements.$inferSelect;
 export type InsertSettlement = typeof settlements.$inferInsert;
 
 // ─── Reward Balances ──────────────────────────────────────────────────────────
+// Per-user running balance of remainder USD and 12-month cap tracking.
 export const rewardBalances = mysqlTable("rewardBalances", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().unique(),
@@ -194,6 +260,9 @@ export type RewardBalance = typeof rewardBalances.$inferSelect;
 export type InsertRewardBalance = typeof rewardBalances.$inferInsert;
 
 // ─── Ledger ───────────────────────────────────────────────────────────────────
+// Immutable append-only audit trail.  Never update or delete rows.
+//
+// eventType values: AWARD_APPLIED | AWARD_PENDING | CAP_REACHED | EXPIRED | REVERSED | LOSS
 export const ledger = mysqlTable("ledger", {
   id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -209,6 +278,7 @@ export type Ledger = typeof ledger.$inferSelect;
 export type InsertLedger = typeof ledger.$inferInsert;
 
 // ─── Resolver Runs ────────────────────────────────────────────────────────────
+// Audit log for each execution of the weekly resolver job.
 export const resolverRuns = mysqlTable("resolverRuns", {
   id: int("id").autoincrement().primaryKey(),
   startedAt: timestamp("startedAt").defaultNow().notNull(),
@@ -223,7 +293,49 @@ export const resolverRuns = mysqlTable("resolverRuns", {
 export type ResolverRun = typeof resolverRuns.$inferSelect;
 export type InsertResolverRun = typeof resolverRuns.$inferInsert;
 
+// ─── Webhook Events (persistent) ─────────────────────────────────────────────
+// Persists Stripe webhook events to the database for merchant diagnostics.
+// Replaces the in-memory store in server/_core/webhookEvents.ts for
+// production durability.
+export const webhookEvents = mysqlTable("webhookEvents", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Stripe event ID (e.g. evt_...). */
+  stripeEventId: varchar("stripeEventId", { length: 128 }).notNull().unique(),
+  /** Stripe event type (e.g. checkout.session.completed). */
+  eventType: varchar("eventType", { length: 128 }).notNull(),
+  signatureValid: boolean("signatureValid").default(false).notNull(),
+  status: mysqlEnum("status", ["processed", "invalid", "test", "error"]).notNull(),
+  /** Full Stripe event payload for debugging. */
+  payload: json("payload").$type<Record<string, unknown>>(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+export type InsertWebhookEvent = typeof webhookEvents.$inferInsert;
+
+// ─── Embed Tokens ─────────────────────────────────────────────────────────────
+// Short-lived signed tokens for the embedded customer dashboard (iframe / JS
+// snippet).  Merchants generate these server-side and pass them to the embed.
+export const embedTokens = mysqlTable("embedTokens", {
+  id: int("id").autoincrement().primaryKey(),
+  /** The merchant that issued this token. */
+  merchantId: int("merchantId").notNull(),
+  /** The end-customer this token grants access to. */
+  userId: int("userId").notNull(),
+  /** Opaque token value (signed JWT or random secret). */
+  token: varchar("token", { length: 256 }).notNull().unique(),
+  /** When this token expires. */
+  expiresAt: timestamp("expiresAt").notNull(),
+  /** Whether the token has been revoked. */
+  revoked: boolean("revoked").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type EmbedToken = typeof embedTokens.$inferSelect;
+export type InsertEmbedToken = typeof embedTokens.$inferInsert;
+
 // ─── Incentives (legacy — kept for backward compat) ───────────────────────────
+// This table predates the Campaign / IncentiveOption / Intent model.
+// New code should use intents + incentiveOptions instead.
 export const incentives = mysqlTable("incentives", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),

@@ -78,7 +78,7 @@ async function handleFetchRequest(request: Request): Promise<Response> {
     headers,
     socket: { encrypted: url.startsWith("https") },
     connection: {},
-  }) as IncomingMessage;
+  }) as unknown as IncomingMessage;
 
   return new Promise<Response>((resolve, reject) => {
     const chunks: Buffer[] = [];

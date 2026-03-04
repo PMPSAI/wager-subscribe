@@ -4,22 +4,27 @@ import {
   Campaign,
   Incentive,
   InsertCampaign,
+  InsertEmbedToken,
   InsertIncentive,
   InsertIncentiveOption,
   InsertIntent,
   InsertLedger,
+  InsertMerchant,
   InsertResolution,
   InsertResolverRun,
   InsertSettlement,
   InsertSubscription,
   InsertTransaction,
   InsertUser,
+  InsertWebhookEvent,
   Intent,
   campaigns,
+  embedTokens,
   incentiveOptions,
   incentives,
   intents,
   ledger,
+  merchants,
   resolutions,
   resolverRuns,
   rewardBalances,
@@ -27,6 +32,7 @@ import {
   subscriptions,
   transactions,
   users,
+  webhookEvents,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -450,4 +456,101 @@ export async function getMerchantKPIs() {
     settlementSuccessRate: totalSett > 0 ? Math.round((appliedCnt / totalSett) * 100) : 0,
     lastResolverRun: lastRun ?? null,
   };
+}
+
+// ─── Merchants ────────────────────────────────────────────────────────────────
+
+export async function createMerchant(data: InsertMerchant) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(merchants).values(data).$returningId();
+  return result?.id ?? 0;
+}
+
+export async function getMerchantByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(merchants).where(eq(merchants.userId, userId)).limit(1);
+  return result[0];
+}
+
+export async function getMerchantById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(merchants).where(eq(merchants.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateMerchant(id: number, data: Partial<InsertMerchant>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(merchants).set({ ...data, updatedAt: new Date() }).where(eq(merchants.id, id));
+}
+
+export async function getAllMerchants() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(merchants).orderBy(desc(merchants.createdAt));
+}
+
+// ─── Webhook Events (persistent) ─────────────────────────────────────────────
+
+/**
+ * Persist a Stripe webhook event to the database for merchant diagnostics.
+ * Falls back gracefully if the DB is unavailable — the in-memory store in
+ * server/_core/webhookEvents.ts still captures the event.
+ */
+export async function persistWebhookEvent(data: InsertWebhookEvent) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(webhookEvents).values(data).onDuplicateKeyUpdate({
+      set: { status: data.status, errorMessage: data.errorMessage },
+    });
+  } catch (err) {
+    console.warn("[DB] Failed to persist webhook event:", err);
+  }
+}
+
+export async function getWebhookEventsFromDb(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(webhookEvents)
+    .orderBy(desc(webhookEvents.createdAt))
+    .limit(limit);
+}
+
+// ─── Embed Tokens ─────────────────────────────────────────────────────────────
+
+export async function createEmbedToken(data: InsertEmbedToken) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(embedTokens).values(data).$returningId();
+  return result?.id ?? 0;
+}
+
+export async function getEmbedToken(token: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(embedTokens)
+    .where(eq(embedTokens.token, token))
+    .limit(1);
+  return result[0];
+}
+
+export async function revokeEmbedToken(token: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(embedTokens).set({ revoked: true }).where(eq(embedTokens.token, token));
+}
+
+export async function cleanExpiredEmbedTokens() {
+  const db = await getDb();
+  if (!db) return;
+  const now = new Date();
+  await db.delete(embedTokens).where(lt(embedTokens.expiresAt, now));
 }
