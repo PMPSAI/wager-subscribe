@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import Stripe from "stripe";
 import { pushWebhookEvent } from "./_core/webhookEvents";
+import { persistWebhookEvent } from "./db";
 import {
   createSubscription,
   getSubscriptionByStripeId,
@@ -11,6 +12,37 @@ import {
 } from "./db";
 import { getPlanByPriceId } from "./products";
 import { getStripe } from "./stripe";
+
+async function recordWebhookEvent(record: {
+  id: string;
+  type: string;
+  signatureValid: boolean;
+  status: "processed" | "invalid" | "test" | "error";
+  payload?: Record<string, unknown>;
+  errorMessage?: string;
+}): Promise<void> {
+  // Always push to in-memory store for immediate UI visibility
+  pushWebhookEvent({
+    id: record.id,
+    type: record.type,
+    timestamp: new Date().toISOString(),
+    signatureValid: record.signatureValid,
+    status: record.status,
+  });
+  // Also persist to DB (fails gracefully if DB is unavailable)
+  try {
+    await persistWebhookEvent({
+      stripeEventId: record.id === "unknown" ? `unknown-${Date.now()}` : record.id,
+      eventType: record.type,
+      signatureValid: record.signatureValid,
+      status: record.status,
+      payload: record.payload,
+      errorMessage: record.errorMessage,
+    });
+  } catch (err) {
+    console.warn("[Webhook] Failed to persist event to DB:", err instanceof Error ? err.message : err);
+  }
+}
 
 export function registerStripeWebhook(app: Express) {
   app.post("/api/stripe/webhook", async (req: Request, res: Response) => {
@@ -34,38 +66,35 @@ export function registerStripeWebhook(app: Express) {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("[Webhook] Signature verification failed:", message);
-      pushWebhookEvent({
+      await recordWebhookEvent({
         id: "unknown",
         type: "unknown",
-        timestamp: new Date().toISOString(),
         signatureValid: false,
         status: "invalid",
+        errorMessage: message,
       });
       return res.status(400).send(`Webhook Error: ${message}`);
     }
-
     // Handle test events
     if (event.id.startsWith("evt_test_")) {
-      pushWebhookEvent({
+      await recordWebhookEvent({
         id: event.id,
         type: event.type,
-        timestamp: new Date().toISOString(),
         signatureValid: true,
         status: "test",
+        payload: event as unknown as Record<string, unknown>,
       });
       console.log("[Webhook] Test event detected, returning verification response");
       return res.json({ verified: true });
     }
-
-    pushWebhookEvent({
+    await recordWebhookEvent({
       id: event.id,
       type: event.type,
-      timestamp: new Date().toISOString(),
       signatureValid: true,
       status: "processed",
+      payload: event as unknown as Record<string, unknown>,
     });
     console.log(`[Webhook] Event: ${event.type} | ID: ${event.id}`);
-
     try {
       switch (event.type) {
         case "checkout.session.completed": {
@@ -76,19 +105,13 @@ export function registerStripeWebhook(app: Express) {
           const planName = session.metadata?.plan_name ?? "Starter";
           const customerId = session.customer as string;
           const subscriptionId = session.subscription as string;
-
-          // Mark transaction as completed
           await updateTransactionStatus(sessionId, "completed", {
             stripePaymentIntentId: (session.payment_intent as string) ?? undefined,
             stripeSubscriptionId: subscriptionId ?? undefined,
           });
-
-          // Update user's Stripe customer ID
           if (userId && customerId) {
             await updateUserStripeCustomerId(userId, customerId);
           }
-
-          // Create subscription record
           if (subscriptionId) {
             const sub = await stripe.subscriptions.retrieve(subscriptionId);
             const priceId = sub.items.data[0]?.price.id ?? "";
@@ -109,28 +132,33 @@ export function registerStripeWebhook(app: Express) {
           }
           break;
         }
-
         case "customer.subscription.updated": {
           const sub = event.data.object as Stripe.Subscription;
           const status = sub.status as "active" | "canceled" | "past_due" | "trialing" | "incomplete";
           await updateSubscriptionStatus(sub.id, status);
           break;
         }
-
         case "customer.subscription.deleted": {
           const sub = event.data.object as Stripe.Subscription;
           await updateSubscriptionStatus(sub.id, "canceled");
           break;
         }
-
         default:
           console.log(`[Webhook] Unhandled event type: ${event.type}`);
       }
     } catch (err) {
       console.error("[Webhook] Handler error:", err);
+      // Record the error in DB
+      await recordWebhookEvent({
+        id: event.id,
+        type: event.type,
+        signatureValid: true,
+        status: "error",
+        payload: event as unknown as Record<string, unknown>,
+        errorMessage: err instanceof Error ? err.message : "Unknown handler error",
+      });
       return res.status(500).json({ error: "Webhook handler failed" });
     }
-
     return res.json({ received: true });
   });
 }

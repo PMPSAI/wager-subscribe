@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import {
   Campaign,
   Incentive,
@@ -40,8 +41,13 @@ let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
-    try { _db = drizzle(process.env.DATABASE_URL); }
-    catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; }
+    try {
+      const sql = neon(process.env.DATABASE_URL);
+      _db = drizzle(sql);
+    } catch (error) {
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
+    }
   }
   return _db;
 }
@@ -69,7 +75,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   else if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; }
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
-  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+  await db.insert(users).values(values).onConflictDoUpdate({ target: users.openId, set: updateSet });
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -90,7 +96,8 @@ export async function updateUserStripeCustomerId(userId: number, stripeCustomerI
 export async function upsertSubscription(sub: InsertSubscription) {
   const db = await getDb();
   if (!db) return;
-  await db.insert(subscriptions).values(sub).onDuplicateKeyUpdate({
+  await db.insert(subscriptions).values(sub).onConflictDoUpdate({
+    target: subscriptions.stripeSubscriptionId,
     set: { status: sub.status, currentPeriodEnd: sub.currentPeriodEnd, updatedAt: new Date() },
   });
 }
@@ -361,7 +368,7 @@ export async function getLedgerByUser(userId: number, limit = 50) {
 export async function createResolverRun(data: InsertResolverRun) {
   const db = await getDb();
   if (!db) return 0;
-  const [result] = await db.insert(resolverRuns).values(data).$returningId();
+  const [result] = await db.insert(resolverRuns).values(data).returning({ id: resolverRuns.id });
   return result?.id ?? 0;
 }
 
@@ -463,8 +470,8 @@ export async function getMerchantKPIs() {
 export async function createMerchant(data: InsertMerchant) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(merchants).values(data).$returningId();
-  return result?.id ?? 0;
+  const [result] = await db.insert(merchants).values(data).returning({ id: merchants.id });
+  return result;
 }
 
 export async function getMerchantByUserId(userId: number) {
@@ -504,7 +511,8 @@ export async function persistWebhookEvent(data: InsertWebhookEvent) {
   const db = await getDb();
   if (!db) return;
   try {
-    await db.insert(webhookEvents).values(data).onDuplicateKeyUpdate({
+    await db.insert(webhookEvents).values(data).onConflictDoUpdate({
+      target: webhookEvents.stripeEventId,
       set: { status: data.status, errorMessage: data.errorMessage },
     });
   } catch (err) {
@@ -527,8 +535,8 @@ export async function getWebhookEventsFromDb(limit = 50) {
 export async function createEmbedToken(data: InsertEmbedToken) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(embedTokens).values(data).$returningId();
-  return result?.id ?? 0;
+  const [result] = await db.insert(embedTokens).values(data).returning({ id: embedTokens.id });
+  return result;
 }
 
 export async function getEmbedToken(token: string) {

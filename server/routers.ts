@@ -48,6 +48,16 @@ import {
   updateSettlementStatus,
   updateUserStripeCustomerId,
   upsertSubscription,
+  createMerchant,
+  getMerchantByUserId,
+  getMerchantById,
+  updateMerchant,
+  getAllMerchants,
+  createEmbedToken,
+  getEmbedToken,
+  revokeEmbedToken,
+  cleanExpiredEmbedTokens,
+  getWebhookEventsFromDb,
 } from "./db";
 import { PLANS } from "./products";
 import { getConditionByKey, getConditionsForTier } from "./incentiveConditions";
@@ -506,8 +516,124 @@ export const appRouter = router({
 
     getWebhookEvents: protectedProcedure.query(async ({ ctx }) => {
       requireAdmin(ctx.user.role);
+      // Return from DB first (persistent), normalized to WebhookEventRecord shape
+      const dbEvents = await getWebhookEventsFromDb(50);
+      if (dbEvents.length > 0) {
+        return dbEvents.map((e) => ({
+          id: e.stripeEventId,
+          type: e.eventType,
+          timestamp: e.createdAt.toISOString(),
+          signatureValid: e.signatureValid,
+          status: e.status,
+        }));
+      }
       return getWebhookEvents(50);
     }),
+
+    // ─── Merchant CRUD ────────────────────────────────────────────────────────
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(1).max(255),
+          slug: z
+            .string()
+            .min(1)
+            .max(128)
+            .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+          stripeAccountId: z.string().optional(),
+          stripeAccessToken: z.string().optional(),
+          stripeRefreshToken: z.string().optional(),
+          stripePublishableKey: z.string().optional(),
+          stripeWebhookEndpointId: z.string().optional(),
+          stripeWebhookSecret: z.string().optional(),
+          isActive: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const result = await createMerchant({ ...input, userId: ctx.user.id });
+        return result;
+      }),
+
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const merchant = await getMerchantByUserId(ctx.user.id);
+      return merchant ?? null;
+    }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const merchant = await getMerchantById(input.id);
+        if (!merchant) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant not found" });
+        return merchant;
+      }),
+
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          name: z.string().min(1).max(255).optional(),
+          slug: z
+            .string()
+            .min(1)
+            .max(128)
+            .regex(/^[a-z0-9-]+$/)
+            .optional(),
+          stripeAccountId: z.string().optional(),
+          stripeAccessToken: z.string().optional(),
+          stripeRefreshToken: z.string().optional(),
+          stripePublishableKey: z.string().optional(),
+          stripeWebhookEndpointId: z.string().optional(),
+          stripeWebhookSecret: z.string().optional(),
+          isActive: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const { id, ...data } = input;
+        await updateMerchant(id, data);
+        return { success: true };
+      }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      requireAdmin(ctx.user.role);
+      return getAllMerchants();
+    }),
+
+    // ─── Embed Token ──────────────────────────────────────────────────────────
+    createEmbedToken: protectedProcedure
+      .input(
+        z.object({
+          merchantId: z.number().int().positive(),
+          ttlSeconds: z.number().int().positive().default(3600),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { merchantId, ttlSeconds } = input;
+        await cleanExpiredEmbedTokens();
+        const token = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+        await createEmbedToken({ merchantId, userId: ctx.user.id, token, expiresAt });
+        return { token, expiresAt };
+      }),
+
+    revokeEmbedToken: protectedProcedure
+      .input(z.object({ token: z.string() }))
+      .mutation(async ({ ctx: _ctx, input }) => {
+        await revokeEmbedToken(input.token);
+        return { success: true };
+      }),
+
+    verifyEmbedToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const record = await getEmbedToken(input.token);
+        if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Token not found" });
+        if (record.revoked) throw new TRPCError({ code: "FORBIDDEN", message: "Token has been revoked" });
+        if (record.expiresAt < new Date()) throw new TRPCError({ code: "FORBIDDEN", message: "Token has expired" });
+        return { valid: true, merchantId: record.merchantId, userId: record.userId };
+      }),
   }),
 
   // ─── Customer Dashboard ──────────────────────────────────────────────────────
