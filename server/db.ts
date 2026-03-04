@@ -435,8 +435,8 @@ export async function getMerchantKPIs() {
   const [intents30d] = await db.select({ count: sql<number>`count(*)` }).from(intents).where(gte(intents.createdAt, thirtyDaysAgo));
   const [totalResolutions] = await db.select({ count: sql<number>`count(*)` }).from(resolutions);
   const [totalWins] = await db.select({ count: sql<number>`count(*)` }).from(resolutions).where(eq(resolutions.outcome, "WIN"));
-  const [appliedSettlements] = await db.select({ total: sql<number>`coalesce(sum(rewardValueUsd), 0)` }).from(settlements).where(eq(settlements.status, "APPLIED"));
-  const [pendingSettlements] = await db.select({ total: sql<number>`coalesce(sum(rewardValueUsd), 0)` }).from(settlements).where(eq(settlements.status, "WIN_PENDING_ELIGIBILITY"));
+  const [appliedSettlements] = await db.select({ total: sql<number>`coalesce(sum("rewardValueUsd"), 0)` }).from(settlements).where(eq(settlements.status, "APPLIED"));
+  const [pendingSettlements] = await db.select({ total: sql<number>`coalesce(sum("rewardValueUsd"), 0)` }).from(settlements).where(eq(settlements.status, "WIN_PENDING_ELIGIBILITY"));
   const [failedSettlements] = await db.select({ count: sql<number>`count(*)` }).from(settlements).where(eq(settlements.status, "FAILED_NEEDS_REVIEW"));
   const [retryQueue] = await db.select({ count: sql<number>`count(*)` }).from(settlements).where(
     inArray(settlements.status, ["WIN_PENDING_ELIGIBILITY", "FAILED_RETRYING"])
