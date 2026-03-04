@@ -29,6 +29,19 @@ await esbuild.build({
   bundle: true,
   platform: "node",
   format: "esm",
+  // Add a require() shim so CJS packages (express, body-parser, depd, etc.)
+  // that use dynamic require() work correctly inside an ESM bundle.
+  // esbuild wraps CJS modules but their internal require() calls need a shim.
+  banner: {
+    js: `
+import { createRequire as __createRequire } from 'module';
+import { fileURLToPath as __fileURLToPath } from 'url';
+import { dirname as __dirname2 } from 'path';
+const require = __createRequire(import.meta.url);
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __dirname2(__filename);
+`.trim(),
+  },
   // Do NOT use `packages: "external"` — that would externalize drizzle-orm,
   // @neondatabase/serverless, stripe, etc. which are not available in the
   // Vercel function runtime.  Instead, bundle everything and only mark
