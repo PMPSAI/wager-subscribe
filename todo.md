@@ -107,6 +107,17 @@
 - [x] TypeScript clean
 - [x] Save checkpoint
 
+## Phase 8.5: Outreach Prospects Page
+
+- [x] Create MerchantProspects.tsx with enriched outreach list (22 prospects)
+- [x] Add contact info: email, Twitter, LinkedIn for all prospects
+- [x] Add company metrics: employees, revenue, funding, tech stack
+- [x] Add fit score + fit reason for each prospect
+- [x] Add 8 new LinkedIn-sourced prospects
+- [x] Add search and filter (source, fit score) functionality
+- [x] Add Prospects nav item to MerchantLayout sidebar
+- [x] Register /merchant/prospects route in App.tsx
+
 ## Phase 8: Compliance Audit & IncentivPay Rename
 
 - [ ] Full regulatory compliance audit (CFPB, FTC, state gambling laws, UDAAP, EFTA)

@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { BarChart3, Megaphone, Target, Wallet, Zap, Webhook, Settings, LogOut, ChevronRight } from "lucide-react";
+import { BarChart3, Megaphone, Target, Wallet, Zap, Webhook, Settings, LogOut, ChevronRight, Users2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -12,6 +12,7 @@ const navItems = [
   { label: "Settlements", icon: Wallet, href: "/merchant/settlements" },
   { label: "Resolver", icon: Zap, href: "/merchant/resolver" },
   { label: "Webhook Test", icon: Webhook, href: "/merchant/webhook" },
+  { label: "Prospects", icon: Users2, href: "/merchant/prospects" },
   { label: "Settings", icon: Settings, href: "/merchant/settings" },
 ];
 
@@ -40,7 +41,7 @@ export default function MerchantLayout({ children }: { children: React.ReactNode
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-4 px-3 space-y-0.5">
+        <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
             const active = location === item.href || (item.href !== "/merchant" && location.startsWith(item.href));
             return (
