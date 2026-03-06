@@ -17,7 +17,7 @@ export default function MerchantCampaigns() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", category: "MARKET", conditionText: "", windowDays: "30", rewardType: "MONTHS_FREE", rewardValue: "1" });
+  const [form, setForm] = useState({ name: "", description: "", category: "market", conditionText: "", windowDays: "30", rewardType: "MONTHS_FREE", rewardValue: "1" });
 
   useEffect(() => {
     if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
@@ -57,7 +57,7 @@ export default function MerchantCampaigns() {
                 <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["MARKET", "SPORTS", "ECONOMY", "CUSTOM"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {["market", "sports", "economy", "custom"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -80,7 +80,7 @@ export default function MerchantCampaigns() {
               <Button
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={createMutation.isPending}
-                onClick={() => createMutation.mutate({ ...form, category: form.category as "MARKET" | "SPORTS" | "ECONOMY" | "CUSTOM", rewardType: form.rewardType as "MONTHS_FREE" | "CREDIT_USD" | "PERCENT_DISCOUNT", windowDays: parseInt(form.windowDays), eligibilityWindowDays: 30 })}
+                onClick={() => createMutation.mutate({ ...form, category: form.category.toLowerCase() as "market" | "sports" | "economy" | "custom", rewardType: form.rewardType as "MONTHS_FREE" | "CREDIT_USD" | "PERCENT_DISCOUNT", windowDays: parseInt(form.windowDays), eligibilityWindowDays: 30 })}
               >
                 {createMutation.isPending ? "Creating..." : "Create Campaign"}
               </Button>

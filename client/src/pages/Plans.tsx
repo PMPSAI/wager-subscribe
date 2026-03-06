@@ -27,7 +27,7 @@ const TIER_BORDER = {
 };
 
 export default function Plans() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [, navigate] = useLocation();
   const { data: plans, isLoading } = trpc.subscription.plans.useQuery();
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation();
@@ -63,9 +63,20 @@ export default function Plans() {
             <span className="font-bold text-foreground text-lg">IncentivPay</span>
           </button>
           <nav className="flex items-center gap-3">
-            {isAuthenticated && (
-              <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")}>
-                Dashboard
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>Home</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/widget")}>Widget</Button>
+            {isAuthenticated ? (
+              <>
+                <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")}>Dashboard</Button>
+                {user?.role === "admin" && (
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/merchant")}>
+                    Merchant Portal
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button size="sm" onClick={() => (window.location.href = `${window.location.origin}/api/simple-login`)}>
+                Sign In
               </Button>
             )}
           </nav>

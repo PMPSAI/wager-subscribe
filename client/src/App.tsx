@@ -17,6 +17,7 @@ import MerchantWebhook from "./pages/merchant/MerchantWebhook";
 import MerchantSettings from "./pages/merchant/MerchantSettings";
 import MerchantProspects from "./pages/merchant/MerchantProspects";
 import Terms from "./pages/Terms";
+import Widget from "./pages/Widget";
 
 function Router() {
   return (
@@ -42,6 +43,8 @@ function Router() {
       <Route path="/merchant/settings" component={MerchantSettings} />
       <Route path="/merchant/prospects" component={MerchantProspects} />
 
+      {/* Widget */}
+      <Route path="/widget" component={Widget} />
       {/* Legal */}
       <Route path="/terms" component={Terms} />
 

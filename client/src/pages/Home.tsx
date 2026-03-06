@@ -43,7 +43,7 @@ const FEATURES = [
 ];
 
 export default function Home() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { oauth, simpleLogin } = useAuthMethods();
   const [, navigate] = useLocation();
 
@@ -60,47 +60,33 @@ export default function Home() {
           </div>
           <nav className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate("/plans")}>Plans</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/widget")}>Widget</Button>
             {isAuthenticated ? (
               <>
                 <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")} className="gap-1.5">
                   Dashboard
                 </Button>
-                {/* Admin-only Merchant Portal link */}
+                {user?.role === "admin" && (
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5" onClick={() => navigate("/merchant")}>
+                    Merchant Portal
+                  </Button>
+                )}
               </>
             ) : (
               <>
-                <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")} className="gap-1.5">
-                  View Dashboard
-                </Button>
                 {simpleLogin && (
-                  <Button size="sm" variant="outline" onClick={() => (window.location.href = `${window.location.origin}/api/simple-login`)} className="gap-1.5">
-                    Sign in without OAuth
+                  <Button size="sm" onClick={() => (window.location.href = `${window.location.origin}/api/simple-login`)} className="gap-1.5">
+                    Sign In <ArrowRight size={14} />
                   </Button>
                 )}
                 {oauth && (
                   <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
-                    Sign In (OAuth) <ArrowRight size={14} />
+                    Sign In <ArrowRight size={14} />
                   </Button>
                 )}
-                {import.meta.env.DEV && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        const r = await fetch("/api/dev-login", { method: "GET", credentials: "include", redirect: "manual" });
-                        if (r.type === "opaqueredirect" || r.status === 0 || r.status === 302) {
-                          window.location.href = "/";
-                          return;
-                        }
-                        if (!r.ok) throw new Error(String(r.status));
-                        window.location.href = "/";
-                      } catch {
-                        window.location.href = `${window.location.origin}/api/dev-login`;
-                      }
-                    }}
-                  >
-                    Dev login
+                {!simpleLogin && !oauth && (
+                  <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")} className="gap-1.5">
+                    View Dashboard
                   </Button>
                 )}
               </>
@@ -233,7 +219,9 @@ export default function Home() {
             </div>
             <nav className="flex gap-6 text-sm text-muted-foreground">
               <button onClick={() => navigate("/plans")} className="hover:text-foreground transition-colors">Plans</button>
+              <button onClick={() => navigate("/widget")} className="hover:text-foreground transition-colors">Widget</button>
               <button onClick={() => navigate("/dashboard")} className="hover:text-foreground transition-colors">Dashboard</button>
+              <button onClick={() => navigate("/merchant")} className="hover:text-foreground transition-colors">Merchant Portal</button>
               <button onClick={() => navigate("/terms")} className="hover:text-foreground transition-colors">Terms</button>
             </nav>
           </div>

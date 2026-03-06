@@ -116,11 +116,15 @@ export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = typeof transactions.$inferInsert;
 
 // ─── Campaigns ────────────────────────────────────────────────────────────────
+export const campaignStatusEnum = pgEnum("campaignStatus", ["ACTIVE", "PAUSED", "ARCHIVED"]);
 export const campaigns = pgTable("campaigns", {
   id: serial("id").primaryKey(),
   merchantId: integer("merchantId"),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
+  category: categoryEnum("category").default("market").notNull(),
+  conditionText: text("conditionText"),
+  status: campaignStatusEnum("status").default("ACTIVE").notNull(),
   stripePriceIds: json("stripePriceIds").$type<string[]>().notNull(),
   maxSelections: integer("maxSelections").default(1).notNull(),
   isActive: boolean("isActive").default(true).notNull(),

@@ -1,32 +1,110 @@
 import MerchantLayout from "@/components/MerchantLayout";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Copy, RefreshCcw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  CheckCircle2, Copy, ExternalLink,
+  AlertCircle, Save, Eye, EyeOff, Plus, Clock, Key, Zap
+} from "lucide-react";
 import { toast } from "sonner";
 
 export default function MerchantSettings() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
 
+  const [merchantName, setMerchantName] = useState("");
+  const [merchantSlug, setMerchantSlug] = useState("");
+  const [stripeSecretKey, setStripeSecretKey] = useState("");
+  const [stripePublishableKey, setStripePublishableKey] = useState("");
+  const [stripeWebhookSecret, setStripeWebhookSecret] = useState("");
+  const [showSecretKey, setShowSecretKey] = useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
+  const [embedTokenTtl, setEmbedTokenTtl] = useState(86400);
+
   useEffect(() => {
     if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
   }, [loading, isAuthenticated, user]);
+
+  const utils = trpc.useUtils();
+
+  const { data: merchant, isLoading: merchantLoading } = trpc.merchant.get.useQuery(undefined, {
+    enabled: !!user && user.role === "admin",
+  });
+
+  useEffect(() => {
+    if (merchant) {
+      setMerchantName(merchant.name ?? "");
+      setMerchantSlug(merchant.slug ?? "");
+      setStripePublishableKey(merchant.stripePublishableKey ?? "");
+    }
+  }, [merchant]);
+
+  const createMerchant = trpc.merchant.create.useMutation({
+    onSuccess: () => { toast.success("Merchant account created!"); utils.merchant.get.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const updateMerchant = trpc.merchant.update.useMutation({
+    onSuccess: () => { toast.success("Settings saved!"); utils.merchant.get.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const createEmbedToken = trpc.merchant.createEmbedToken.useMutation({
+    onSuccess: (data) => {
+      toast.success("Embed token generated!");
+      navigator.clipboard.writeText(data.token);
+      toast.info("Token copied to clipboard");
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied`);
   };
 
-  const successRedirectPattern = typeof window !== "undefined" ? `${window.location.origin}/incentiv-select?session_id={CHECKOUT_SESSION_ID}` : "";
-  const embedSnippet = `<script src="${typeof window !== "undefined" ? window.location.origin : "https://yoursite.com"}/embed.js"></script>
-<div id="incentiv-dashboard" data-token="YOUR_EMBED_TOKEN"></div>
+  const handleSave = () => {
+    if (!merchantName.trim() || !merchantSlug.trim()) {
+      toast.error("Name and slug are required");
+      return;
+    }
+    const payload = {
+      name: merchantName,
+      slug: merchantSlug,
+      stripePublishableKey: stripePublishableKey || undefined,
+      stripeAccessToken: stripeSecretKey || undefined,
+      stripeWebhookSecret: stripeWebhookSecret || undefined,
+    };
+    if (merchant) {
+      updateMerchant.mutate({ id: merchant.id, ...payload });
+    } else {
+      createMerchant.mutate(payload);
+    }
+  };
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://wager-subscribe.vercel.app";
+  const successRedirectPattern = `${origin}/incentiv-select?session_id={CHECKOUT_SESSION_ID}`;
+  const widgetUrl = `${origin}/widget`;
+  const embedSnippet = `<!-- WagerSubscribe Widget -->
+<script src="${origin}/embed.js"></script>
+<div id="wager-subscribe-widget"></div>
 <script>
-  IncentivSubscribe.init('#incentiv-dashboard');
+  WagerSubscribe.init('#wager-subscribe-widget', {
+    token: 'YOUR_EMBED_TOKEN'
+  });
 </script>`;
+  const iframeSnippet = `<iframe
+  src="${widgetUrl}?embed=1&token=YOUR_EMBED_TOKEN"
+  width="100%" height="600"
+  frameborder="0"
+  style="border-radius:12px;border:1px solid #e5e7eb;"
+></iframe>`;
 
   if (loading || !user) return null;
 
@@ -35,118 +113,198 @@ export default function MerchantSettings() {
       <div className="space-y-6 max-w-4xl">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage integrations, installation, and branding</p>
+          <p className="text-sm text-gray-500 mt-0.5">Manage your merchant account, Stripe integration, and widget installation</p>
         </div>
 
+        {/* Merchant Account */}
         <Card>
           <CardHeader>
-            <CardTitle>Stripe Integration</CardTitle>
-            <CardDescription>Stripe is used for checkout and subscription billing. Billing deferrals are applied via the settlement engine.</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <Zap size={16} className="text-emerald-600" />
+              </div>
+              Merchant Account
+            </CardTitle>
+            <CardDescription>
+              {merchant ? "Your merchant account is active." : "Create your merchant account to start using WagerSubscribe."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 font-bold">
+            {merchantLoading ? (
+              <div className="h-20 bg-gray-100 rounded-xl animate-pulse" />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium mb-1.5 block">Business Name</Label>
+                    <Input value={merchantName} onChange={e => setMerchantName(e.target.value)} placeholder="e.g. Acme Sports Betting" />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-1.5 block">Slug (URL identifier)</Label>
+                    <Input
+                      value={merchantSlug}
+                      onChange={e => setMerchantSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                      placeholder="e.g. acme-sports"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Used in widget URLs: /widget/{merchantSlug || "your-slug"}</p>
+                  </div>
+                </div>
+                {merchant && (
+                  <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl">
+                    <CheckCircle2 size={16} className="text-emerald-600" />
+                    <div>
+                      <p className="text-sm font-medium text-emerald-800">Merchant ID: #{merchant.id}</p>
+                      <p className="text-xs text-emerald-600">Account active</p>
+                    </div>
+                    <Badge className="ml-auto bg-emerald-100 text-emerald-700 text-xs">
+                      {merchant.isActive ? "Active" : "Paused"}
+                    </Badge>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Stripe Integration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
+                <Key size={16} className="text-violet-600" />
+              </div>
+              Stripe Integration
+            </CardTitle>
+            <CardDescription>
+              Connect your Stripe account to process subscription payments and apply rewards as billing credits.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className={`flex items-center justify-between p-4 border rounded-xl ${merchant?.stripeAccessToken ? "bg-emerald-50 border-emerald-200" : "bg-yellow-50 border-yellow-200"}`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${merchant?.stripeAccessToken ? "bg-emerald-100 text-emerald-700" : "bg-yellow-100 text-yellow-700"}`}>
                   S
                 </div>
                 <div>
                   <div className="font-medium text-gray-900 flex items-center gap-2">
-                    Connected
-                    <Badge variant="success" className="gap-1 text-[10px] h-5 px-1.5">
-                      <CheckCircle2 className="w-3 h-3" /> Live Mode
-                    </Badge>
+                    {merchant?.stripeAccessToken ? "Stripe Connected" : "Stripe Not Configured"}
+                    {merchant?.stripeAccessToken ? (
+                      <Badge className="bg-emerald-100 text-emerald-700 text-[10px] h-5 px-1.5 gap-1">
+                        <CheckCircle2 size={10} /> Live Mode
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-yellow-100 text-yellow-700 text-[10px] h-5 px-1.5 gap-1">
+                        <AlertCircle size={10} /> Not Connected
+                      </Badge>
+                    )}
                   </div>
-                  <div className="text-sm text-gray-500">Configure STRIPE_SECRET_KEY in .env</div>
+                  <div className="text-sm text-gray-500">
+                    {merchant?.stripeAccessToken ? "Payments enabled. Rewards applied as billing credits." : "Add your Stripe keys below to enable payments."}
+                  </div>
                 </div>
               </div>
-              <Button variant="outline" size="sm" className="gap-2" disabled>
-                <RefreshCcw className="w-4 h-4" />
-                Reconnect
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => window.open("https://dashboard.stripe.com/apikeys", "_blank")}>
+                <ExternalLink size={14} /> Stripe Dashboard
               </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Installation Snippet</CardTitle>
-            <CardDescription>Embed the customer dashboard and set Stripe Checkout success redirect.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-                Success Redirect URL (Stripe Checkout)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm font-mono"
-                  value={successRedirectPattern}
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => copyToClipboard(successRedirectPattern, "Redirect URL")}
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Use this as success_url when creating Stripe Checkout sessions.</p>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-                Embed Snippet (Customer Dashboard)
-              </label>
-              <div className="relative">
-                <pre className="p-4 rounded-lg bg-gray-900 text-gray-100 text-sm overflow-x-auto font-mono">
-                  {embedSnippet}
-                </pre>
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="absolute top-2 right-2 h-8 w-8 bg-gray-800 hover:bg-gray-700 text-gray-300 border-none"
-                  onClick={() => copyToClipboard(embedSnippet, "Embed snippet")}
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Place on your subscription site to show the incentive dashboard. Replace YOUR_EMBED_TOKEN with a signed token.</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Branding</CardTitle>
-            <CardDescription>Customize the appearance of the customer dashboard (UI only; persistence can be added later).</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4 pt-2">
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1.5 block">Primary Color</label>
-                <div className="flex gap-2 items-center">
-                  <div className="w-10 h-10 rounded-md bg-emerald-600 border shadow-sm" />
-                  <input
-                    type="text"
-                    readOnly
-                    className="flex h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm"
-                    value="#059669"
-                  />
+                <Label className="text-sm font-medium mb-1.5 block">Publishable Key (pk_live_... or pk_test_...)</Label>
+                <Input value={stripePublishableKey} onChange={e => setStripePublishableKey(e.target.value)} placeholder="pk_live_51..." className="font-mono text-sm" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium mb-1.5 block">Secret Key (sk_live_... or sk_test_...)</Label>
+                <div className="relative">
+                  <Input type={showSecretKey ? "text" : "password"} value={stripeSecretKey} onChange={e => setStripeSecretKey(e.target.value)} placeholder="sk_live_51..." className="font-mono text-sm pr-10" />
+                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onClick={() => setShowSecretKey(!showSecretKey)}>
+                    {showSecretKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1.5 block">Logo URL</label>
-                <input
-                  type="text"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="https://yoursite.com/logo.png"
-                  readOnly
-                />
+                <Label className="text-sm font-medium mb-1.5 block">Webhook Signing Secret (whsec_...)</Label>
+                <div className="relative">
+                  <Input type={showWebhookSecret ? "text" : "password"} value={stripeWebhookSecret} onChange={e => setStripeWebhookSecret(e.target.value)} placeholder="whsec_..." className="font-mono text-sm pr-10" />
+                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onClick={() => setShowWebhookSecret(!showWebhookSecret)}>
+                    {showWebhookSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700">
+                <p className="font-medium mb-1">Webhook Endpoint</p>
+                <code className="font-mono text-xs bg-blue-100 rounded px-2 py-1 block mt-1">{origin}/api/stripe-webhook</code>
+                <p className="text-xs mt-1 text-blue-600">Events to listen: <code>checkout.session.completed</code>, <code>customer.subscription.updated</code>, <code>invoice.payment_failed</code></p>
               </div>
             </div>
-            <Button disabled>Save Branding (coming soon)</Button>
+
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={handleSave} disabled={createMerchant.isPending || updateMerchant.isPending}>
+              <Save size={14} />
+              {createMerchant.isPending || updateMerchant.isPending ? "Saving..." : merchant ? "Save Settings" : "Create Merchant Account"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Widget Installation */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Widget Installation</CardTitle>
+            <CardDescription>Embed the WagerSubscribe widget on your site.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <div>
+                <p className="font-medium text-gray-900">Widget Preview</p>
+                <p className="text-sm text-gray-500">Test the full subscription + prediction flow</p>
+              </div>
+              <Button variant="outline" className="gap-2" onClick={() => window.open(widgetUrl, "_blank")}>
+                <ExternalLink size={14} /> Open Widget
+              </Button>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Generate Embed Token</Label>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 border rounded-lg px-3 py-2 bg-gray-50">
+                  <Clock size={14} className="text-gray-400" />
+                  <select value={embedTokenTtl} onChange={e => setEmbedTokenTtl(Number(e.target.value))} className="text-sm bg-transparent outline-none">
+                    <option value={3600}>1 hour</option>
+                    <option value={86400}>24 hours</option>
+                    <option value={604800}>7 days</option>
+                    <option value={2592000}>30 days</option>
+                  </select>
+                </div>
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2" disabled={!merchant || createEmbedToken.isPending} onClick={() => merchant && createEmbedToken.mutate({ merchantId: merchant.id, ttlSeconds: embedTokenTtl })}>
+                  <Plus size={14} />
+                  {createEmbedToken.isPending ? "Generating..." : "Generate Token"}
+                </Button>
+              </div>
+              {!merchant && <p className="text-xs text-yellow-600 mt-2 flex items-center gap-1"><AlertCircle size={12} /> Create your merchant account first</p>}
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Stripe Checkout Success URL</Label>
+              <div className="flex gap-2">
+                <Input readOnly className="font-mono text-xs bg-muted" value={successRedirectPattern} />
+                <Button variant="outline" size="icon" onClick={() => copyToClipboard(successRedirectPattern, "Redirect URL")}><Copy size={14} /></Button>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">iFrame Embed</Label>
+              <div className="relative">
+                <pre className="p-4 rounded-xl bg-gray-900 text-gray-100 text-xs overflow-x-auto font-mono whitespace-pre-wrap">{iframeSnippet}</pre>
+                <Button variant="secondary" size="icon" className="absolute top-2 right-2 h-7 w-7 bg-gray-800 hover:bg-gray-700 text-gray-300 border-none" onClick={() => copyToClipboard(iframeSnippet, "iFrame snippet")}><Copy size={12} /></Button>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Script Embed</Label>
+              <div className="relative">
+                <pre className="p-4 rounded-xl bg-gray-900 text-gray-100 text-xs overflow-x-auto font-mono whitespace-pre-wrap">{embedSnippet}</pre>
+                <Button variant="secondary" size="icon" className="absolute top-2 right-2 h-7 w-7 bg-gray-800 hover:bg-gray-700 text-gray-300 border-none" onClick={() => copyToClipboard(embedSnippet, "Embed snippet")}><Copy size={12} /></Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

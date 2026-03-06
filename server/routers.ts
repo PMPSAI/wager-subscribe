@@ -231,6 +231,18 @@ export const appRouter = router({
       requireAdmin(ctx.user.role);
       return getAllCampaigns();
     }),
+    /** Public: list active campaigns with their options (for widget) */
+    listPublic: publicProcedure.query(async () => {
+      const campaigns = await getAllCampaigns();
+      const active = campaigns.filter((c: any) => c.isActive && c.status !== "ARCHIVED" && c.status !== "PAUSED");
+      const withOptions = await Promise.all(
+        active.map(async (c: any) => {
+          const options = await getOptionsByCampaign(c.id);
+          return { ...c, options };
+        })
+      );
+      return withOptions;
+    }),
 
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -246,7 +258,7 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().min(1),
         description: z.string().optional(),
-        category: z.enum(["MARKET", "SPORTS", "ECONOMY", "CUSTOM"]),
+        category: z.enum(["market", "sports", "economy", "custom"]),
         conditionText: z.string().min(1),
         windowDays: z.number().int().min(1).max(365),
         rewardType: z.enum(["MONTHS_FREE", "CREDIT_USD", "PERCENT_DISCOUNT"]),
@@ -256,7 +268,17 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         requireAdmin(ctx.user.role);
-        await createCampaign({ name: input.name, description: input.description, stripePriceIds: [], maxSelections: 1, isActive: true, termsText: input.conditionText });
+        await createCampaign({
+          name: input.name,
+          description: input.description,
+          category: input.category,
+          conditionText: input.conditionText,
+          status: "ACTIVE" as any,
+          stripePriceIds: [],
+          maxSelections: 1,
+          isActive: true,
+          termsText: input.conditionText,
+        });
         return { success: true };
       }),
 
@@ -265,8 +287,10 @@ export const appRouter = router({
         id: z.number(),
         name: z.string().optional(),
         description: z.string().optional(),
-        status: z.enum(["ACTIVE", "PAUSED", "ARCHIVED"]).optional(),
+        category: z.enum(["market", "sports", "economy", "custom"]).optional(),
         conditionText: z.string().optional(),
+        status: z.enum(["ACTIVE", "PAUSED", "ARCHIVED"]).optional(),
+        isActive: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         requireAdmin(ctx.user.role);
