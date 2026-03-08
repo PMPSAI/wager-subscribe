@@ -43,6 +43,9 @@ export const webhookEventStatusEnum = pgEnum("webhookEventStatus", [
 export const incentiveStatusEnum = pgEnum("incentiveStatus", [
   "pending", "achieved", "not_achieved", "expired", "cancelled",
 ]);
+export const predictionMarketSourceEnum = pgEnum("predictionMarketSource", [
+  "polymarket", "kalshi", "manual",
+]);
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
@@ -50,6 +53,11 @@ export const users = pgTable("users", {
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
+  passwordHash: text("passwordHash"),
+  firstName: varchar("firstName", { length: 128 }),
+  lastName: varchar("lastName", { length: 128 }),
+  phone: varchar("phone", { length: 32 }),
+  address: text("address"),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: roleEnum("role").default("user").notNull(),
   stripeCustomerId: varchar("stripeCustomerId", { length: 64 }),
@@ -72,6 +80,7 @@ export const merchants = pgTable("merchants", {
   stripePublishableKey: varchar("stripePublishableKey", { length: 128 }),
   stripeWebhookEndpointId: varchar("stripeWebhookEndpointId", { length: 128 }),
   stripeWebhookSecret: text("stripeWebhookSecret"),
+  stripeMode: varchar("stripeMode", { length: 8 }).default("test").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -79,7 +88,25 @@ export const merchants = pgTable("merchants", {
 export type Merchant = typeof merchants.$inferSelect;
 export type InsertMerchant = typeof merchants.$inferInsert;
 
-// ─── Subscriptions ────────────────────────────────────────────────────────────
+// ─── Merchant Plans (packages purchased by merchants) ─────────────────────────
+export const merchantPlanEnum = pgEnum("merchantPlan", ["basic", "pro", "elite"]);
+export const merchantSubscriptions = pgTable("merchantSubscriptions", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchantId").notNull(),
+  userId: integer("userId").notNull(),
+  plan: merchantPlanEnum("plan").notNull(),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }).unique(),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  stripePriceId: varchar("stripePriceId", { length: 128 }),
+  status: subscriptionStatusEnum("status").default("active").notNull(),
+  currentPeriodEnd: integer("currentPeriodEnd"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type MerchantSubscription = typeof merchantSubscriptions.$inferSelect;
+export type InsertMerchantSubscription = typeof merchantSubscriptions.$inferInsert;
+
+// ─── Subscriptions (end-user plans) ──────────────────────────────────────────
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull(),
@@ -151,6 +178,8 @@ export const incentiveOptions = pgTable("incentiveOptions", {
   rewardLabel: varchar("rewardLabel", { length: 255 }),
   resolutionWindowDays: integer("resolutionWindowDays").default(7).notNull(),
   dataSource: varchar("dataSource", { length: 255 }),
+  // Polymarket / Kalshi market linkage
+  predictionMarketId: integer("predictionMarketId"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -167,6 +196,7 @@ export const intents = pgTable("intents", {
   incentiveOptionId: integer("incentiveOptionId").notNull(),
   stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
   stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  userChoice: varchar("userChoice", { length: 16 }),
   termsSnapshot: json("termsSnapshot").$type<{
     conditionKey: string;
     conditionLabel: string;
@@ -177,6 +207,9 @@ export const intents = pgTable("intents", {
     dataSource: string;
     termsText: string;
     lockedAt: string;
+    predictionMarketId?: number;
+    yesPrice?: number;
+    noPrice?: number;
   }>(),
   status: intentStatusEnum("status").default("CREATED").notNull(),
   resolveAt: timestamp("resolveAt"),
@@ -314,3 +347,46 @@ export const incentives = pgTable("incentives", {
 });
 export type Incentive = typeof incentives.$inferSelect;
 export type InsertIncentive = typeof incentives.$inferInsert;
+
+// ─── Prediction Markets (Polymarket / Kalshi) ─────────────────────────────────
+export const predictionMarkets = pgTable("predictionMarkets", {
+  id: serial("id").primaryKey(),
+  source: predictionMarketSourceEnum("source").notNull(),
+  externalId: varchar("externalId", { length: 256 }).notNull(),
+  slug: varchar("slug", { length: 256 }),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 128 }),
+  yesPrice: decimal("yesPrice", { precision: 6, scale: 4 }),
+  noPrice: decimal("noPrice", { precision: 6, scale: 4 }),
+  volume: decimal("volume", { precision: 18, scale: 2 }),
+  resolutionDate: timestamp("resolutionDate"),
+  resolvedAt: timestamp("resolvedAt"),
+  resolvedOutcome: varchar("resolvedOutcome", { length: 32 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  isEnabled: boolean("isEnabled").default(false).notNull(),
+  lastFetchedAt: timestamp("lastFetchedAt"),
+  rawData: json("rawData").$type<Record<string, unknown>>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type PredictionMarket = typeof predictionMarkets.$inferSelect;
+export type InsertPredictionMarket = typeof predictionMarkets.$inferInsert;
+
+// ─── Member Accounts (end-users tied to a merchant) ───────────────────────────
+export const memberAccounts = pgTable("memberAccounts", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchantId").notNull(),
+  userId: integer("userId"),
+  email: varchar("email", { length: 320 }).notNull(),
+  firstName: varchar("firstName", { length: 128 }),
+  lastName: varchar("lastName", { length: 128 }),
+  phone: varchar("phone", { length: 32 }),
+  sessionToken: varchar("sessionToken", { length: 128 }),
+  sessionExpiresAt: timestamp("sessionExpiresAt"),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type MemberAccount = typeof memberAccounts.$inferSelect;
+export type InsertMemberAccount = typeof memberAccounts.$inferInsert;

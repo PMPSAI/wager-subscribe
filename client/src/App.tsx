@@ -18,6 +18,8 @@ import MerchantSettings from "./pages/merchant/MerchantSettings";
 import MerchantProspects from "./pages/merchant/MerchantProspects";
 import Terms from "./pages/Terms";
 import Widget from "./pages/Widget";
+import MerchantSignup from "./pages/MerchantSignup";
+import AdminPortal from "./pages/admin/AdminPortal";
 
 function Router() {
   return (
@@ -33,6 +35,9 @@ function Router() {
       {/* Customer dashboard */}
       <Route path="/dashboard" component={Dashboard} />
 
+      {/* Merchant Signup (public) */}
+      <Route path="/merchant/signup" component={MerchantSignup} />
+
       {/* Merchant Portal (admin only, guarded inside each page) */}
       <Route path="/merchant" component={MerchantDashboard} />
       <Route path="/merchant/campaigns" component={MerchantCampaigns} />
@@ -43,8 +48,15 @@ function Router() {
       <Route path="/merchant/settings" component={MerchantSettings} />
       <Route path="/merchant/prospects" component={MerchantProspects} />
 
-      {/* Widget */}
-      <Route path="/widget" component={Widget} />
+      {/* Admin Portal */}
+      <Route path="/admin" component={AdminPortal} />
+
+      {/* Widget - supports slug routing for merchant-specific embeds */}
+      <Route path="/widget/:slug">
+        {(params) => <Widget merchantSlug={params.slug} />}
+      </Route>
+      <Route path="/widget">{() => <Widget />}</Route>
+
       {/* Legal */}
       <Route path="/terms" component={Terms} />
 

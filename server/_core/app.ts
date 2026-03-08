@@ -12,6 +12,7 @@ import { sdk } from "./sdk";
 import { serveStatic, setupVite } from "./vite";
 import { ENV } from "./env";
 import * as db from "../db";
+import { registerAuthRoutes } from "../auth";
 
 /**
  * Creates the Express app (used by both standalone server and Vercel serverless).
@@ -25,6 +26,7 @@ export async function createApp(): Promise<Express> {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerOAuthRoutes(app);
+  registerAuthRoutes(app);
 
   app.get("/api/auth/methods", (_req, res) => {
     res.json({

@@ -12,56 +12,73 @@ import {
   createIncentive,
   createIncentiveOption,
   createIntent,
+  createMemberAccount,
+  createMerchant,
+  createMerchantSubscription,
   createResolution,
   createResolverRun,
   createSettlement,
   createTransaction,
+  getActiveMerchantSubscription,
   getActiveSubscriptionByUserId,
   getAllCampaigns,
   getAllIntents,
+  getAllMerchantSubscriptions,
+  getAllMerchants,
   getAllOptions,
+  getAllPredictionMarkets,
   getAllSettlements,
+  getAllUsers,
   getCampaignById,
+  getEnabledPredictionMarkets,
+  getEmbedToken,
   getIncentiveByTransactionId,
   getIncentivesByUserId,
   getAllIncentives,
   getIntentById,
   getIntentsDueForResolution,
   getLedgerByUser,
+  getMemberByEmail,
+  getMemberBySessionToken,
+  getMembersByMerchant,
+  getMerchantByUserId,
+  getMerchantById,
   getMerchantKPIs,
   getOptionById,
-  pauseAllCampaigns,
   getOptionsByCampaign,
   getOrCreateRewardBalance,
+  getPredictionMarketById,
   getResolutionByIntentId,
   getSettlementByIntentId,
   getTransactionById,
   getTransactionBySessionId,
   getTransactionsByUserId,
+  getUserById,
   getUserIntents,
   markTransactionIncentiveSelected,
+  pauseAllCampaigns,
   updateCampaign,
   updateIncentiveStatus,
   updateIntentStatus,
+  updateMemberAccount,
+  updateMerchant,
+  updatePredictionMarket,
   updateResolverRun,
   updateRewardBalance,
   updateSettlementStatus,
+  updateUserProfile,
   updateUserStripeCustomerId,
+  upsertPredictionMarket,
   upsertSubscription,
-  createMerchant,
-  getMerchantByUserId,
-  getMerchantById,
-  updateMerchant,
-  getAllMerchants,
-  createEmbedToken,
-  getEmbedToken,
-  revokeEmbedToken,
   cleanExpiredEmbedTokens,
+  revokeEmbedToken,
+  createEmbedToken,
   getWebhookEventsFromDb,
 } from "./db";
 import { PLANS } from "./products";
 import { getConditionByKey, getConditionsForTier } from "./incentiveConditions";
 import { getWebhookEvents } from "./_core/webhookEvents";
+import { fetchPolymarketMarkets, fetchKalshiMarkets, checkPolymarketResolution, checkKalshiResolution } from "./markets";
 
 function requireAdmin(role: string) {
   if (role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
@@ -700,6 +717,274 @@ export const appRouter = router({
   // ─── Ledger ──────────────────────────────────────────────────────────────────
   ledger: router({
     mine: protectedProcedure.query(async ({ ctx }) => getLedgerByUser(ctx.user.id)),
+  }),
+
+  // ─── Prediction Markets ───────────────────────────────────────────────────────
+  markets: router({
+    /** Public: list enabled markets for widget */
+    listEnabled: publicProcedure.query(async () => {
+      return getEnabledPredictionMarkets();
+    }),
+
+    /** Admin: list all markets with pagination */
+    list: protectedProcedure
+      .input(z.object({ source: z.string().optional(), limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        return getAllPredictionMarkets({ source: input.source, limit: input.limit });
+      }),
+
+    /** Admin: sync markets from Polymarket */
+    syncPolymarket: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(100).default(20) }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const markets = await fetchPolymarketMarkets(input.limit);
+        let synced = 0;
+        for (const m of markets) {
+          try {
+            await upsertPredictionMarket({
+              source: m.source,
+              externalId: m.externalId,
+              slug: m.slug,
+              title: m.title,
+              description: m.description,
+              category: m.category,
+              yesPrice: m.yesPrice?.toFixed(4),
+              noPrice: m.noPrice?.toFixed(4),
+              volume: m.volume?.toFixed(2),
+              resolutionDate: m.resolutionDate,
+              resolvedAt: m.resolvedAt,
+              resolvedOutcome: m.resolvedOutcome,
+              isActive: m.isActive,
+              lastFetchedAt: new Date(),
+              rawData: m.rawData,
+            });
+            synced++;
+          } catch (e) { /* skip duplicates */ }
+        }
+        return { synced, total: markets.length };
+      }),
+
+    /** Admin: sync markets from Kalshi */
+    syncKalshi: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(100).default(20), apiKey: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const apiKey = input.apiKey || process.env.KALSHI_API_KEY;
+        const markets = await fetchKalshiMarkets(apiKey, input.limit);
+        let synced = 0;
+        for (const m of markets) {
+          try {
+            await upsertPredictionMarket({
+              source: m.source,
+              externalId: m.externalId,
+              slug: m.slug,
+              title: m.title,
+              description: m.description,
+              category: m.category,
+              yesPrice: m.yesPrice?.toFixed(4),
+              noPrice: m.noPrice?.toFixed(4),
+              volume: m.volume?.toFixed(2),
+              resolutionDate: m.resolutionDate,
+              resolvedAt: m.resolvedAt,
+              resolvedOutcome: m.resolvedOutcome,
+              isActive: m.isActive,
+              lastFetchedAt: new Date(),
+              rawData: m.rawData,
+            });
+            synced++;
+          } catch (e) { /* skip duplicates */ }
+        }
+        return { synced, total: markets.length };
+      }),
+
+    /** Admin: toggle market enabled/disabled for widget */
+    toggleEnabled: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), isEnabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        await updatePredictionMarket(input.id, { isEnabled: input.isEnabled });
+        return { success: true };
+      }),
+
+    /** Admin: manually set a market as resolved */
+    resolve: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), outcome: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        await updatePredictionMarket(input.id, {
+          resolvedOutcome: input.outcome,
+          resolvedAt: new Date(),
+          isActive: false,
+        });
+        return { success: true };
+      }),
+
+    /** Admin: auto-resolve intents linked to resolved markets */
+    autoResolveIntents: protectedProcedure.mutation(async ({ ctx }) => {
+      requireAdmin(ctx.user.role);
+      const markets = await getAllPredictionMarkets({ enabledOnly: false });
+      const resolvedMarkets = markets.filter((m: any) => m.resolvedOutcome && m.resolvedAt);
+      let resolved = 0;
+      for (const market of resolvedMarkets) {
+        // Check live resolution from API
+        let outcome: string | undefined = market.resolvedOutcome ?? undefined;
+        if (!outcome && market.source === "polymarket") {
+          const r = await checkPolymarketResolution(market.externalId);
+          if (r.resolved) outcome = r.outcome;
+        } else if (!outcome && market.source === "kalshi") {
+          const r = await checkKalshiResolution(market.externalId, process.env.KALSHI_API_KEY);
+          if (r.resolved) outcome = r.outcome;
+        }
+        if (!outcome) continue;
+        // Update market
+        await updatePredictionMarket(market.id, { resolvedOutcome: outcome, resolvedAt: new Date(), isActive: false });
+        resolved++;
+      }
+      return { resolved };
+    }),
+  }),
+
+  // ─── Admin Portal ─────────────────────────────────────────────────────────────
+  admin: router({
+    /** Full platform overview */
+    overview: protectedProcedure.query(async ({ ctx }) => {
+      requireAdmin(ctx.user.role);
+      const [allMerchants, allUsers, allIntents, allSettlements, allMerchantSubs, allMarkets] = await Promise.all([
+        getAllMerchants(),
+        getAllUsers(200),
+        getAllIntents(500),
+        getAllSettlements(200),
+        getAllMerchantSubscriptions(),
+        getAllPredictionMarkets({ limit: 200 }),
+      ]);
+      return {
+        merchants: allMerchants,
+        users: allUsers,
+        intents: allIntents,
+        settlements: allSettlements,
+        merchantSubscriptions: allMerchantSubs,
+        markets: allMarkets,
+        stats: {
+          totalMerchants: allMerchants.length,
+          activeMerchants: allMerchants.filter((m: any) => m.isActive).length,
+          totalUsers: allUsers.length,
+          totalIntents: allIntents.length,
+          pendingIntents: allIntents.filter((i: any) => i.status === "TRACKING").length,
+          resolvedIntents: allIntents.filter((i: any) => i.status?.startsWith("RESOLVED")).length,
+          totalMarkets: allMarkets.length,
+          enabledMarkets: allMarkets.filter((m: any) => m.isEnabled).length,
+          totalRevenue: allMerchantSubs.filter((s: any) => s.status === "active").length,
+        },
+      };
+    }),
+
+    /** Admin: update merchant settings including Stripe mode */
+    updateMerchantSettings: protectedProcedure
+      .input(z.object({
+        merchantId: z.number().int().positive(),
+        stripeMode: z.enum(["test", "live"]).optional(),
+        stripePublishableKey: z.string().optional(),
+        stripeWebhookSecret: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const { merchantId, ...data } = input;
+        await updateMerchant(merchantId, data);
+        return { success: true };
+      }),
+
+    /** Admin: get user profile */
+    getUser: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        return getUserById(input.userId);
+      }),
+
+    /** Admin: update user role */
+    updateUserRole: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin"]) }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const { updateUserProfile } = await import("./db");
+        await updateUserProfile(input.userId, {});
+        // Role update via direct DB call
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (db) {
+          const { users } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
+        }
+        return { success: true };
+      }),
+  }),
+
+  // ─── Member Accounts (widget end-users) ──────────────────────────────────────
+  member: router({
+    /** Public: widget member signup */
+    signup: publicProcedure
+      .input(z.object({
+        merchantSlug: z.string(),
+        email: z.string().email(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+        phone: z.string().optional(),
+        anonToken: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Find merchant by slug
+        const allMerchants = await getAllMerchants();
+        const merchant = allMerchants.find((m: any) => m.slug === input.merchantSlug);
+        if (!merchant) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant not found" });
+
+        // Check if member already exists
+        const existing = await getMemberByEmail(merchant.id, input.email);
+        if (existing) {
+          // Return existing session token
+          const sessionToken = existing.sessionToken || crypto.randomUUID();
+          if (!existing.sessionToken) {
+            await updateMemberAccount(existing.id, { sessionToken, sessionExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) });
+          }
+          return { success: true, sessionToken, memberId: existing.id, isNew: false };
+        }
+
+        // Create new member
+        const sessionToken = crypto.randomUUID();
+        const member = await createMemberAccount({
+          merchantId: merchant.id,
+          email: input.email.toLowerCase(),
+          firstName: input.firstName,
+          lastName: input.lastName,
+          phone: input.phone,
+          sessionToken,
+          sessionExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        });
+        return { success: true, sessionToken, memberId: member?.id, isNew: true };
+      }),
+
+    /** Public: verify member session token */
+    verify: publicProcedure
+      .input(z.object({ sessionToken: z.string() }))
+      .query(async ({ input }) => {
+        const member = await getMemberBySessionToken(input.sessionToken);
+        if (!member) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+        if (member.sessionExpiresAt && member.sessionExpiresAt < new Date()) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Session expired" });
+        }
+        return { valid: true, member: { id: member.id, email: member.email, firstName: member.firstName, lastName: member.lastName } };
+      }),
+
+    /** Admin: list all members for a merchant */
+    list: protectedProcedure
+      .input(z.object({ merchantId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        return getMembersByMerchant(input.merchantId);
+      }),
   }),
 });
 

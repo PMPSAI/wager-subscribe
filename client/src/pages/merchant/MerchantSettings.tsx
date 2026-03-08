@@ -20,6 +20,7 @@ export default function MerchantSettings() {
 
   const [merchantName, setMerchantName] = useState("");
   const [merchantSlug, setMerchantSlug] = useState("");
+  const [stripeMode, setStripeMode] = useState<"test" | "live">("test");
   const [stripeSecretKey, setStripeSecretKey] = useState("");
   const [stripePublishableKey, setStripePublishableKey] = useState("");
   const [stripeWebhookSecret, setStripeWebhookSecret] = useState("");
@@ -42,6 +43,7 @@ export default function MerchantSettings() {
       setMerchantName(merchant.name ?? "");
       setMerchantSlug(merchant.slug ?? "");
       setStripePublishableKey(merchant.stripePublishableKey ?? "");
+      setStripeMode((merchant.stripeMode as "test" | "live") || "test");
     }
   }, [merchant]);
 
@@ -77,6 +79,7 @@ export default function MerchantSettings() {
     const payload = {
       name: merchantName,
       slug: merchantSlug,
+      stripeMode,
       stripePublishableKey: stripePublishableKey || undefined,
       stripeAccessToken: stripeSecretKey || undefined,
       stripeWebhookSecret: stripeWebhookSecret || undefined,
@@ -206,6 +209,25 @@ export default function MerchantSettings() {
               <Button variant="outline" size="sm" className="gap-2" onClick={() => window.open("https://dashboard.stripe.com/apikeys", "_blank")}>
                 <ExternalLink size={14} /> Stripe Dashboard
               </Button>
+            </div>
+
+            <div className="flex gap-3 mb-4">
+              <button
+                type="button"
+                onClick={() => setStripeMode("test")}
+                className={`flex-1 py-2.5 rounded-lg border-2 font-medium text-sm transition-all ${stripeMode === "test" ? "border-yellow-400 bg-yellow-50 text-yellow-700" : "border-gray-200 text-gray-400 hover:border-gray-300"}`}
+              >
+                🧪 Test Mode
+                <div className="text-xs font-normal mt-0.5 opacity-70">Sandbox / no real charges</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStripeMode("live")}
+                className={`flex-1 py-2.5 rounded-lg border-2 font-medium text-sm transition-all ${stripeMode === "live" ? "border-green-500 bg-green-50 text-green-700" : "border-gray-200 text-gray-400 hover:border-gray-300"}`}
+              >
+                💳 Live Mode
+                <div className="text-xs font-normal mt-0.5 opacity-70">Real payments</div>
+              </button>
             </div>
 
             <div className="space-y-4 pt-2">

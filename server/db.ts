@@ -10,7 +10,10 @@ import {
   InsertIncentiveOption,
   InsertIntent,
   InsertLedger,
+  InsertMemberAccount,
   InsertMerchant,
+  InsertMerchantSubscription,
+  InsertPredictionMarket,
   InsertResolution,
   InsertResolverRun,
   InsertSettlement,
@@ -25,7 +28,10 @@ import {
   incentives,
   intents,
   ledger,
+  memberAccounts,
+  merchantSubscriptions,
   merchants,
+  predictionMarkets,
   resolutions,
   resolverRuns,
   rewardBalances,
@@ -561,4 +567,156 @@ export async function cleanExpiredEmbedTokens() {
   if (!db) return;
   const now = new Date();
   await db.delete(embedTokens).where(lt(embedTokens.expiresAt, now));
+}
+
+// ─── Prediction Markets ───────────────────────────────────────────────────────
+export async function upsertPredictionMarket(data: InsertPredictionMarket) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .insert(predictionMarkets)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [predictionMarkets.externalId, predictionMarkets.source],
+      set: {
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        yesPrice: data.yesPrice,
+        noPrice: data.noPrice,
+        volume: data.volume,
+        resolutionDate: data.resolutionDate,
+        resolvedAt: data.resolvedAt,
+        resolvedOutcome: data.resolvedOutcome,
+        isActive: data.isActive,
+        lastFetchedAt: new Date(),
+        rawData: data.rawData,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+export async function getAllPredictionMarkets(opts?: { enabledOnly?: boolean; source?: string; limit?: number }) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (opts?.enabledOnly) conditions.push(eq(predictionMarkets.isEnabled, true));
+  if (opts?.source) conditions.push(eq(predictionMarkets.source, opts.source as any));
+  const base = db.select().from(predictionMarkets).orderBy(desc(predictionMarkets.updatedAt)).limit(opts?.limit ?? 100);
+  if (conditions.length === 0) return base;
+  if (conditions.length === 1) return base.where(conditions[0]);
+  return base.where(and(...conditions));
+}
+
+export async function getPredictionMarketById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(predictionMarkets).where(eq(predictionMarkets.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function updatePredictionMarket(id: number, data: Partial<InsertPredictionMarket>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(predictionMarkets).set({ ...data, updatedAt: new Date() }).where(eq(predictionMarkets.id, id));
+}
+
+export async function getEnabledPredictionMarkets() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(predictionMarkets).where(and(eq(predictionMarkets.isEnabled, true), eq(predictionMarkets.isActive, true)));
+}
+
+// ─── Member Accounts ──────────────────────────────────────────────────────────
+export async function createMemberAccount(data: InsertMemberAccount) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(memberAccounts).values(data).returning();
+  return result[0] ?? null;
+}
+
+export async function getMemberByEmail(merchantId: number, email: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select()
+    .from(memberAccounts)
+    .where(and(eq(memberAccounts.merchantId, merchantId), eq(memberAccounts.email, email.toLowerCase())))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function getMemberBySessionToken(token: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select()
+    .from(memberAccounts)
+    .where(eq(memberAccounts.sessionToken, token))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function getMembersByMerchant(merchantId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(memberAccounts).where(eq(memberAccounts.merchantId, merchantId)).orderBy(desc(memberAccounts.createdAt));
+}
+
+export async function updateMemberAccount(id: number, data: Partial<InsertMemberAccount>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(memberAccounts).set({ ...data, updatedAt: new Date() }).where(eq(memberAccounts.id, id));
+}
+
+// ─── Merchant Subscriptions (merchant plan purchases) ─────────────────────────
+export async function createMerchantSubscription(data: InsertMerchantSubscription) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.insert(merchantSubscriptions).values(data).returning();
+  return result[0] ?? null;
+}
+
+export async function getActiveMerchantSubscription(merchantId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select()
+    .from(merchantSubscriptions)
+    .where(and(eq(merchantSubscriptions.merchantId, merchantId), eq(merchantSubscriptions.status, "active")))
+    .orderBy(desc(merchantSubscriptions.createdAt))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function getAllMerchantSubscriptions() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(merchantSubscriptions).orderBy(desc(merchantSubscriptions.createdAt));
+}
+
+// ─── User Utilities ───────────────────────────────────────────────────────────
+export async function updateUserProfile(userId: number, data: {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  address?: string;
+  name?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, userId));
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function getAllUsers(limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(users).orderBy(desc(users.createdAt)).limit(limit);
 }

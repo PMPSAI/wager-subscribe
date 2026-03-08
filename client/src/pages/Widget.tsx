@@ -1,24 +1,22 @@
 /**
  * WagerSubscribe Embeddable Widget
  * 
- * This page serves as both:
- * 1. A standalone /widget route for testing
- * 2. The content loaded by the embed.js script via iframe
+ * Supports:
+ * - /widget (default demo)
+ * - /widget/:merchantSlug (merchant-specific)
+ * - Anonymous tracking via localStorage tokens
+ * - Member signup (email-based, no password required)
  * 
- * Flow: Select Plan → Stripe Checkout → Select Prediction → Track
+ * Flow: Select Plan → Member Auth → Prediction → Track & Earn
  */
 import { useState, useEffect } from "react";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { useAuthMethods } from "@/_core/hooks/useAuthMethods";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useLocation, useSearch } from "wouter";
 import {
   Zap, Trophy, TrendingUp, Shield, ArrowRight, CheckCircle2,
-  CreditCard, Target, Clock, Star, Crown, Rocket, Lock
+  CreditCard, Target, Clock, Star, Crown, Rocket, Lock, User, Mail
 } from "lucide-react";
-import { useLocation, useSearch } from "wouter";
 
 const TIER_CONFIG = {
   starter: { icon: Rocket, color: "blue", label: "Starter", price: "$9/mo" },
@@ -26,78 +24,125 @@ const TIER_CONFIG = {
   elite: { icon: Crown, color: "amber", label: "Elite", price: "$79/mo" },
 };
 
-type Step = "plan" | "auth" | "prediction" | "tracking";
+type Step = "plan" | "member-auth" | "prediction" | "tracking";
 
-export default function Widget() {
-  const { user, isAuthenticated, loading } = useAuth();
-  const { simpleLogin, oauth } = useAuthMethods();
-  const [step, setStep] = useState<Step>("plan");
-  const [selectedTier, setSelectedTier] = useState<"starter" | "pro" | "elite" | null>(null);
+const ANON_TOKEN_KEY = "ws_anon_token";
+const MEMBER_TOKEN_KEY = "ws_member_token";
+const MEMBER_ID_KEY = "ws_member_id";
+
+function getAnonToken(): string {
+  let token = localStorage.getItem(ANON_TOKEN_KEY);
+  if (!token) {
+    token = crypto.randomUUID();
+    localStorage.setItem(ANON_TOKEN_KEY, token);
+  }
+  return token;
+}
+
+interface WidgetProps {
+  merchantSlug?: string;
+}
+
+export default function Widget({ merchantSlug }: WidgetProps) {
   const [, navigate] = useLocation();
   const search = useSearch();
-  const params = new URLSearchParams(search);
-  const sessionId = params.get("session_id");
+  const urlParams = new URLSearchParams(search);
+  const sessionId = urlParams.get("session_id");
+  // Support slug from URL param too
+  const slugParam = urlParams.get("slug");
+  const effectiveSlug = merchantSlug || slugParam || "wager-demo";
 
-  // If returning from Stripe checkout, go to prediction step
-  useEffect(() => {
-    if (sessionId && isAuthenticated) {
-      setStep("prediction");
-    }
-  }, [sessionId, isAuthenticated]);
+  const [step, setStep] = useState<Step>("plan");
+  const [selectedTier, setSelectedTier] = useState<"starter" | "pro" | "elite" | null>(null);
+  const [anonToken] = useState(getAnonToken);
+  const [memberToken, setMemberToken] = useState<string | null>(() => localStorage.getItem(MEMBER_TOKEN_KEY));
+  const [memberId, setMemberId] = useState<number | null>(() => {
+    const v = localStorage.getItem(MEMBER_ID_KEY);
+    return v ? parseInt(v) : null;
+  });
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberFirstName, setMemberFirstName] = useState("");
+  const [memberLastName, setMemberLastName] = useState("");
+  const [signingUp, setSigningUp] = useState(false);
+  const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
 
   const { data: plans, isLoading: plansLoading } = trpc.subscription.plans.useQuery();
-  const { data: sessionData } = trpc.subscription.verifySession.useQuery(
-    { sessionId: sessionId ?? "" },
-    { enabled: !!sessionId && isAuthenticated }
+  const { data: enabledMarkets } = trpc.markets.listEnabled.useQuery();
+  const memberSignup = trpc.member.signup.useMutation();
+  const memberVerify = trpc.member.verify.useQuery(
+    { sessionToken: memberToken ?? "" },
+    { enabled: !!memberToken }
   );
-  const { data: conditions } = trpc.incentiv.conditions.useQuery(
-    { planTier: sessionData?.transaction?.planTier ?? "starter" },
-    { enabled: !!sessionData?.transaction }
-  );
-  const { data: dashboardData } = trpc.dashboard.summary.useQuery(undefined, {
-    enabled: isAuthenticated && step === "tracking",
-  });
 
-  const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
-    onSuccess: (res) => {
-      if (res.url) window.location.href = res.url;
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  // If returning from Stripe checkout, skip to prediction
+  useEffect(() => {
+    if (sessionId) {
+      setStep("prediction");
+    }
+  }, [sessionId]);
 
-  const selectIncentive = trpc.incentiv.selectIncentive.useMutation({
-    onSuccess: () => {
-      toast.success("Prediction activated!");
-      setStep("tracking");
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  // If member already has a token, skip auth
+  useEffect(() => {
+    if (memberToken && memberVerify.data?.valid) {
+      // Already authenticated as member
+    }
+  }, [memberToken, memberVerify.data]);
 
   const handleSelectPlan = (tier: "starter" | "pro" | "elite") => {
     setSelectedTier(tier);
-    if (!isAuthenticated) {
-      setStep("auth");
+    if (!memberToken) {
+      setStep("member-auth");
+    } else {
+      // Already a member, go to checkout
+      handleCheckout(tier);
+    }
+  };
+
+  const handleCheckout = async (tier: "starter" | "pro" | "elite") => {
+    try {
+      const origin = window.location.origin;
+      // Redirect to plans page with tier pre-selected
+      window.location.href = `${origin}/plans?tier=${tier}&slug=${effectiveSlug}&anon=${anonToken}`;
+    } catch (e: any) {
+      toast.error(e.message || "Checkout failed");
+    }
+  };
+
+  const handleMemberSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!memberEmail) {
+      toast.error("Email is required");
       return;
     }
-    toast.loading("Redirecting to checkout...", { id: "checkout" });
-    createCheckout.mutate({ planTier: tier });
-  };
-
-  const handleAuth = () => {
-    if (simpleLogin) {
-      window.location.href = `${window.location.origin}/api/simple-login?redirect=${encodeURIComponent(window.location.href)}`;
-    } else if (oauth) {
-      window.location.href = `${window.location.origin}/api/auth/redirect?redirect=${encodeURIComponent(window.location.href)}`;
+    setSigningUp(true);
+    try {
+      const result = await memberSignup.mutateAsync({
+        merchantSlug: effectiveSlug,
+        email: memberEmail,
+        firstName: memberFirstName || undefined,
+        lastName: memberLastName || undefined,
+        anonToken,
+      });
+      if (result.sessionToken) {
+        localStorage.setItem(MEMBER_TOKEN_KEY, result.sessionToken);
+        localStorage.setItem(MEMBER_ID_KEY, String(result.memberId));
+        setMemberToken(result.sessionToken);
+        setMemberId(result.memberId ?? null);
+        toast.success(result.isNew ? "Welcome! Account created." : "Welcome back!");
+        // Now proceed to checkout
+        if (selectedTier) handleCheckout(selectedTier);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Signup failed");
+    } finally {
+      setSigningUp(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full" />
-      </div>
-    );
-  }
+  const handleSkipAuth = () => {
+    // Allow anonymous users to proceed
+    if (selectedTier) handleCheckout(selectedTier);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50">
@@ -109,20 +154,17 @@ export default function Widget() {
               <Zap size={14} className="text-white" fill="currentColor" />
             </div>
             <span className="font-bold text-gray-900">WagerSubscribe</span>
+            {effectiveSlug && effectiveSlug !== "wager-demo" && (
+              <span className="text-xs text-gray-400 ml-1">· {effectiveSlug}</span>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={() => navigate("/plans")}>Plans</Button>
-            {isAuthenticated ? (
-              <>
-                <Button size="sm" variant="ghost" onClick={() => navigate("/dashboard")}>Dashboard</Button>
-                {user?.role === "admin" && (
-                  <Button size="sm" variant="ghost" onClick={() => navigate("/merchant")}>Merchant</Button>
-                )}
-              </>
-            ) : (
-              <Button size="sm" variant="outline" onClick={handleAuth}>
-                <Lock size={13} className="mr-1.5" /> Sign In
-              </Button>
+          <div className="flex items-center gap-2 text-sm">
+            <a href="/plans" className="text-gray-500 hover:text-gray-900">Plans</a>
+            <a href="/merchant/signup" className="text-gray-500 hover:text-gray-900">Merchants</a>
+            {memberToken && memberVerify.data?.valid && (
+              <span className="text-emerald-600 font-medium flex items-center gap-1">
+                <User size={13} /> {memberVerify.data.member.email?.split("@")[0]}
+              </span>
             )}
           </div>
         </div>
@@ -131,14 +173,19 @@ export default function Widget() {
       {/* Progress Steps */}
       <div className="max-w-4xl mx-auto px-4 py-6">
         <div className="flex items-center justify-center gap-2 mb-8">
-          {(["plan", "auth", "prediction", "tracking"] as Step[]).map((s, i) => {
-            const stepLabels = { plan: "Choose Plan", auth: "Sign In", prediction: "Pick Prediction", tracking: "Track & Earn" };
-            const stepIndex = ["plan", "auth", "prediction", "tracking"].indexOf(step);
-            const thisIndex = i;
+          {(["plan", "member-auth", "prediction", "tracking"] as Step[]).map((s, i) => {
+            const stepLabels: Record<Step, string> = {
+              "plan": "Choose Plan",
+              "member-auth": "Quick Sign Up",
+              "prediction": "Pick Prediction",
+              "tracking": "Track & Earn"
+            };
+            const stepOrder: Step[] = ["plan", "member-auth", "prediction", "tracking"];
+            const stepIndex = stepOrder.indexOf(step);
+            const thisIndex = stepOrder.indexOf(s);
             const isDone = thisIndex < stepIndex;
             const isCurrent = s === step;
-            // Skip auth step if already authenticated
-            if (s === "auth" && isAuthenticated) return null;
+            if (s === "member-auth" && memberToken) return null;
             return (
               <div key={s} className="flex items-center gap-2">
                 {i > 0 && <div className={`w-8 h-0.5 ${isDone ? "bg-emerald-500" : "bg-gray-200"}`} />}
@@ -183,7 +230,7 @@ export default function Widget() {
                     >
                       {plan.popular && (
                         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                          <Badge className="bg-violet-600 text-white text-xs px-3">Most Popular</Badge>
+                          <span className="bg-violet-600 text-white text-xs px-3 py-1 rounded-full font-medium">Most Popular</span>
                         </div>
                       )}
                       <div className="flex items-center gap-3 mb-4">
@@ -216,19 +263,18 @@ export default function Widget() {
                           </li>
                         ))}
                       </ul>
-                      <Button
-                        className={`w-full gap-2 ${
+                      <button
+                        className={`w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-colors ${
                           plan.popular
                             ? "bg-violet-600 hover:bg-violet-700 text-white"
                             : "bg-emerald-600 hover:bg-emerald-700 text-white"
                         }`}
-                        disabled={createCheckout.isPending && selectedTier === plan.tier}
                         onClick={(e) => { e.stopPropagation(); handleSelectPlan(plan.tier); }}
                       >
                         <CreditCard size={14} />
-                        {createCheckout.isPending && selectedTier === plan.tier ? "Redirecting..." : "Subscribe & Predict"}
+                        Subscribe & Predict
                         <ArrowRight size={14} />
-                      </Button>
+                      </button>
                     </div>
                   );
                 })}
@@ -242,136 +288,179 @@ export default function Widget() {
           </div>
         )}
 
-        {/* Step: Auth */}
-        {step === "auth" && !isAuthenticated && (
-          <div className="max-w-md mx-auto text-center">
+        {/* Step: Member Auth */}
+        {step === "member-auth" && (
+          <div className="max-w-md mx-auto">
             <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Lock size={28} className="text-emerald-600" />
+              <div className="text-center mb-6">
+                <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Mail size={24} className="text-emerald-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Quick Sign Up</h2>
+                <p className="text-gray-500 text-sm mt-1">
+                  Enter your email to track your prediction and receive updates.
+                </p>
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in to continue</h2>
-              <p className="text-gray-500 mb-6">
-                Create a free account or sign in to subscribe to the{" "}
-                <strong>{selectedTier ? TIER_CONFIG[selectedTier].label : ""}</strong> plan and place your prediction.
-              </p>
-              <div className="space-y-3">
-                {simpleLogin && (
-                  <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={handleAuth}>
-                    <Zap size={16} /> Sign In / Create Account
-                  </Button>
-                )}
-                {oauth && (
-                  <Button className="w-full gap-2" variant="outline" onClick={handleAuth}>
-                    Sign In with OAuth <ArrowRight size={14} />
-                  </Button>
-                )}
-              </div>
-              <button
-                className="mt-4 text-sm text-gray-400 hover:text-gray-600 underline"
-                onClick={() => setStep("plan")}
-              >
-                ← Back to plans
-              </button>
+
+              <form onSubmit={handleMemberSignup} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">First Name</label>
+                    <input
+                      type="text"
+                      value={memberFirstName}
+                      onChange={e => setMemberFirstName(e.target.value)}
+                      placeholder="John"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={memberLastName}
+                      onChange={e => setMemberLastName(e.target.value)}
+                      placeholder="Doe"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    value={memberEmail}
+                    onChange={e => setMemberEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={signingUp}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors"
+                >
+                  {signingUp ? "Setting up..." : "Continue to Checkout →"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSkipAuth}
+                  className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Skip for now (anonymous)
+                </button>
+              </form>
             </div>
           </div>
         )}
 
         {/* Step: Pick Prediction */}
-        {step === "prediction" && isAuthenticated && (
+        {step === "prediction" && (
           <div>
             <div className="text-center mb-8">
-              <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
-                <CheckCircle2 size={16} /> Payment successful! Now pick your prediction.
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Prediction Condition</h2>
-              <p className="text-gray-500">If this condition is met within 30 days, you earn your reward automatically.</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Pick Your Prediction</h2>
+              <p className="text-gray-500">Choose a market to predict. If you're right, you earn free subscription months.</p>
             </div>
-            {!sessionData ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full" />
-              </div>
-            ) : !conditions?.length ? (
-              <div className="text-center py-12 text-gray-400">No conditions available for your plan tier.</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
-                {conditions.map((cond: any) => {
-                  const catColors: Record<string, string> = {
-                    market: "bg-blue-100 text-blue-700",
-                    sports: "bg-orange-100 text-orange-700",
-                    economy: "bg-green-100 text-green-700",
-                    custom: "bg-purple-100 text-purple-700",
-                  };
-                  return (
-                    <div
-                      key={cond.key}
-                      className="bg-white rounded-xl border-2 border-gray-200 p-5 cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all group"
-                      onClick={() => {
-                        if (!sessionData.transaction) return;
-                        selectIncentive.mutate({
-                          transactionId: sessionData.transaction.id,
-                          conditionKey: cond.key,
-                        });
-                      }}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <Badge className={`text-xs ${catColors[cond.category] ?? "bg-gray-100 text-gray-600"}`}>
-                          {cond.category.toUpperCase()}
-                        </Badge>
-                        <Target size={16} className="text-gray-300 group-hover:text-emerald-500 transition-colors" />
-                      </div>
-                      <p className="font-semibold text-gray-900 mb-1">{cond.label}</p>
-                      <p className="text-sm text-gray-500 mb-4">{cond.detail}</p>
-                      <div className="flex items-center gap-2">
-                        <Clock size={13} className="text-gray-400" />
-                        <span className="text-xs text-gray-400">30-day tracking window</span>
-                      </div>
+
+            {enabledMarkets && enabledMarkets.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {enabledMarkets.map((m: any) => (
+                  <div
+                    key={m.id}
+                    onClick={() => setSelectedCondition(String(m.id))}
+                    className={`bg-white rounded-xl border-2 p-5 cursor-pointer transition-all hover:shadow-md ${
+                      selectedCondition === String(m.id) ? "border-emerald-500 shadow-md" : "border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        m.source === "polymarket" ? "bg-blue-100 text-blue-700" :
+                        m.source === "kalshi" ? "bg-purple-100 text-purple-700" :
+                        "bg-gray-100 text-gray-600"
+                      }`}>
+                        {m.source}
+                      </span>
+                      {m.yesPrice && (
+                        <span className="text-sm font-bold text-emerald-600">
+                          Yes: {(parseFloat(m.yesPrice) * 100).toFixed(0)}¢
+                        </span>
+                      )}
                     </div>
-                  );
-                })}
+                    <h3 className="font-semibold text-gray-900 mb-2 leading-snug">{m.title}</h3>
+                    {m.resolutionDate && (
+                      <div className="flex items-center gap-1 text-xs text-gray-400">
+                        <Clock size={11} />
+                        Resolves {new Date(m.resolutionDate).toLocaleDateString()}
+                      </div>
+                    )}
+                    {selectedCondition === String(m.id) && (
+                      <div className="mt-3 flex items-center gap-1.5 text-emerald-600 text-sm font-medium">
+                        <CheckCircle2 size={14} />
+                        Selected
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-white rounded-2xl border border-gray-200">
+                <Target size={40} className="text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">No prediction markets available yet.</p>
+                <p className="text-gray-400 text-sm mt-1">Check back soon — markets are updated regularly.</p>
+              </div>
+            )}
+
+            {selectedCondition && (
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setStep("tracking")}
+                  className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-colors inline-flex items-center gap-2"
+                >
+                  Confirm Prediction <ArrowRight size={16} />
+                </button>
               </div>
             )}
           </div>
         )}
 
         {/* Step: Tracking */}
-        {step === "tracking" && isAuthenticated && (
-          <div className="max-w-2xl mx-auto">
-            <div className="text-center mb-8">
+        {step === "tracking" && (
+          <div className="max-w-lg mx-auto text-center">
+            <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trophy size={28} className="text-emerald-600" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">You're all set!</h2>
-              <p className="text-gray-500">Your prediction is now being tracked. We'll notify you when it resolves.</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Star size={16} className="text-yellow-500" /> Your Active Predictions
-              </h3>
-              {dashboardData?.intents?.filter((i: any) => i.status === "TRACKING").length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-4">No active predictions yet. Check back soon.</p>
-              ) : (
-                <div className="space-y-3">
-                  {dashboardData?.intents?.filter((i: any) => i.status === "TRACKING").map((intent: any) => (
-                    <div key={intent.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-xl">
-                      <div>
-                        <p className="font-medium text-gray-900 text-sm">{(intent.termsSnapshot as any)?.conditionLabel ?? `Prediction #${intent.id}`}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Resolves: {intent.resolveAt ? new Date(intent.resolveAt).toLocaleDateString() : "—"}
-                        </p>
-                      </div>
-                      <Badge className="bg-blue-100 text-blue-700 text-xs">TRACKING</Badge>
-                    </div>
-                  ))}
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">You're All Set!</h2>
+              <p className="text-gray-500 mb-6">
+                Your prediction is being tracked. We'll notify you when it resolves.
+                {memberEmail && ` Updates will be sent to ${memberEmail}.`}
+              </p>
+              <div className="bg-emerald-50 rounded-xl p-4 mb-6 text-left">
+                <div className="flex items-center gap-2 mb-2">
+                  <Star size={16} className="text-emerald-600" />
+                  <span className="font-semibold text-emerald-800 text-sm">How Rewards Work</span>
                 </div>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={() => navigate("/dashboard")}>
-                <ArrowRight size={14} /> Go to Full Dashboard
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setStep("plan")}>
-                Subscribe Another Plan
-              </Button>
+                <ul className="space-y-1.5 text-sm text-emerald-700">
+                  <li className="flex items-start gap-2"><CheckCircle2 size={13} className="mt-0.5 shrink-0" /> Prediction resolves within 30 days</li>
+                  <li className="flex items-start gap-2"><CheckCircle2 size={13} className="mt-0.5 shrink-0" /> If correct, earn free subscription months</li>
+                  <li className="flex items-start gap-2"><CheckCircle2 size={13} className="mt-0.5 shrink-0" /> Credits applied automatically</li>
+                </ul>
+              </div>
+              <div className="flex gap-3">
+                <a href="/dashboard" className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-sm transition-colors text-center">
+                  View Dashboard
+                </a>
+                <button
+                  onClick={() => setStep("plan")}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-sm transition-colors"
+                >
+                  Add Another
+                </button>
+              </div>
             </div>
           </div>
         )}
