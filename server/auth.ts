@@ -125,7 +125,7 @@ export function registerAuthRoutes(app: Express) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // Update last signed in
+      // Update last signed in (also promotes to admin if openId matches OWNER_OPEN_ID)
       await db.upsertUser({
         openId,
         name: user.name ?? "",
@@ -134,14 +134,17 @@ export function registerAuthRoutes(app: Express) {
         lastSignedIn: new Date(),
       });
 
+      // Re-read user so the response reflects the latest role (e.g. admin promotion)
+      const freshUser = (await db.getUserByOpenId(openId)) ?? user;
+
       const token = await sdk.createSessionToken(openId, {
-        name: user.name ?? "",
+        name: freshUser.name ?? "",
         expiresInMs: ONE_YEAR_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-      res.json({ success: true, user: { email: user.email, name: user.name, role: user.role } });
+      res.json({ success: true, user: { email: freshUser.email, name: freshUser.name, role: freshUser.role } });
     } catch (err) {
       console.error("[Auth/login] Error:", err);
       res.status(500).json({ error: "Login failed. Please try again." });
