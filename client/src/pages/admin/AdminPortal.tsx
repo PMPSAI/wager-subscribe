@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
-type Tab = "overview" | "merchants" | "markets" | "users" | "intents" | "subscriptions";
+type Tab = "overview" | "merchants" | "markets" | "users" | "intents" | "subscriptions" | "prospects";
 
 export default function AdminPortal() {
   const [, navigate] = useLocation();
@@ -99,6 +99,7 @@ export default function AdminPortal() {
     { id: "users", label: "Users" },
     { id: "intents", label: "Intents" },
     { id: "subscriptions", label: "Subscriptions" },
+    { id: "prospects", label: "Prospects" },
   ];
 
   return (
@@ -490,6 +491,29 @@ export default function AdminPortal() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+        {/* Prospects Tab */}
+        {tab === "prospects" && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-2xl font-bold">Prospects</h1>
+              <a
+                href="/merchant/prospects"
+                className="px-4 py-2 bg-yellow-400 text-gray-900 rounded-lg text-sm font-bold hover:bg-yellow-300 transition-colors"
+              >
+                Open Full Prospects View &rarr;
+              </a>
+            </div>
+            <div className="bg-gray-900 rounded-lg border border-gray-800 p-8 text-center">
+              <p className="text-gray-400 mb-4">The full prospects database is available in the dedicated prospects view.</p>
+              <a
+                href="/merchant/prospects"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-yellow-400 text-gray-900 rounded-lg font-bold hover:bg-yellow-300 transition-colors"
+              >
+                View All Prospects
+              </a>
             </div>
           </div>
         )}

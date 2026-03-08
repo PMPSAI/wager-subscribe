@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { TRPCError } from "@trpc/server";
-import { getStripe } from "./stripe";
+import { getStripe, getStripeMode } from "./stripe";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -98,7 +98,7 @@ export const appRouter = router({
 
   // ─── Subscription / Checkout ────────────────────────────────────────────────
   subscription: router({
-    plans: publicProcedure.query(() => PLANS),
+    plans: publicProcedure.query(() => ({ plans: PLANS, stripeMode: getStripeMode() })),
 
     createCheckoutSession: protectedProcedure
       .input(z.object({ planTier: z.enum(["starter", "pro", "elite"]) }))

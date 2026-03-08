@@ -66,7 +66,8 @@ export default function Widget({ merchantSlug }: WidgetProps) {
   const [signingUp, setSigningUp] = useState(false);
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
 
-  const { data: plans, isLoading: plansLoading } = trpc.subscription.plans.useQuery();
+  const { data: plansData, isLoading: plansLoading } = trpc.subscription.plans.useQuery();
+  const plans = plansData?.plans;
   const { data: enabledMarkets } = trpc.markets.listEnabled.useQuery();
   const memberSignup = trpc.member.signup.useMutation();
   const memberVerify = trpc.member.verify.useQuery(

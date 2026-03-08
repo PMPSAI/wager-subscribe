@@ -1,5 +1,4 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -7,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { CheckCircle2, Zap, ArrowRight, Star, Crown, Rocket, TrendingUp, Trophy, Shield } from "lucide-react";
 import { useLocation } from "wouter";
+import Navbar from "@/components/Navbar";
 
 const TIER_ICONS = {
   starter: <Rocket size={22} className="text-blue-500" />,
@@ -27,14 +27,16 @@ const TIER_BORDER = {
 };
 
 export default function Plans() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
-  const { data: plans, isLoading } = trpc.subscription.plans.useQuery();
+  const { data: plansData, isLoading } = trpc.subscription.plans.useQuery();
+  const plans = plansData?.plans;
+  const stripeMode = plansData?.stripeMode;
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation();
 
   const handleSubscribe = async (tier: "starter" | "pro" | "elite") => {
     if (!isAuthenticated) {
-      window.location.href = getLoginUrl();
+      navigate(`/auth?redirect=${encodeURIComponent("/plans")}`);
       return;
     }
     try {
@@ -53,36 +55,25 @@ export default function Plans() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Nav */}
-      <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container max-w-6xl mx-auto flex items-center justify-between h-16 px-4">
-          <button onClick={() => navigate("/")} className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Zap size={16} className="text-primary-foreground" fill="currentColor" />
-            </div>
-            <span className="font-bold text-foreground text-lg">IncentivPay</span>
-          </button>
-          <nav className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>Home</Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/widget")}>Widget</Button>
-            {isAuthenticated ? (
-              <>
-                <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")}>Dashboard</Button>
-                {user?.role === "admin" && (
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => navigate("/merchant")}>
-                    Merchant Portal
-                  </Button>
-                )}
-              </>
-            ) : (
-              <Button size="sm" onClick={() => (window.location.href = `${window.location.origin}/api/simple-login`)}>
-                Sign In
-              </Button>
-            )}
-          </nav>
-        </div>
-      </header>
+      <Navbar />
 
+      {/* Stripe mode banner */}
+      {stripeMode === "live" && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-center">
+          <p className="text-sm text-amber-800">
+            <span className="font-semibold">Live mode active</span> — payments will be charged to your real card.
+            Use test card <code className="bg-amber-100 px-1 rounded">4242 4242 4242 4242</code> only in sandbox environments.
+          </p>
+        </div>
+      )}
+      {stripeMode === "test" && (
+        <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-2.5 text-center">
+          <p className="text-sm text-emerald-800">
+            <span className="font-semibold">Sandbox / Test mode</span> — no real charges.
+            Use test card <code className="bg-emerald-100 px-1 rounded">4242 4242 4242 4242</code>.
+          </p>
+        </div>
+      )}
       {/* Hero */}
       <div className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-accent/10 border-b border-border">
         <div className="container max-w-5xl mx-auto py-16 text-center">
@@ -119,7 +110,7 @@ export default function Plans() {
             {plans?.map((plan) => (
               <Card
                 key={plan.tier}
-                className={`relative rounded-2xl border-2 bg-gradient-to-br ${TIER_GRADIENT[plan.tier]} ${TIER_BORDER[plan.tier]} transition-all duration-200 hover:shadow-xl hover:-translate-y-1`}
+                className={`relative rounded-2xl border-2 bg-gradient-to-br ${TIER_GRADIENT[plan.tier as keyof typeof TIER_GRADIENT]} ${TIER_BORDER[plan.tier as keyof typeof TIER_BORDER]} transition-all duration-200 hover:shadow-xl hover:-translate-y-1`}
               >
                 {plan.popular && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
@@ -131,7 +122,7 @@ export default function Plans() {
 
                 <CardHeader className="pb-4 pt-7">
                   <div className="flex items-center gap-2 mb-3">
-                    {TIER_ICONS[plan.tier]}
+                    {TIER_ICONS[plan.tier as keyof typeof TIER_ICONS]}
                     <span className="font-bold text-foreground text-lg">{plan.name}</span>
                   </div>
                   <div className="flex items-baseline gap-1">

@@ -2,13 +2,13 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
-import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import {
   Target, Trophy, Clock, DollarSign, Star, RefreshCw, Plus,
   CheckCircle, XCircle, AlertCircle, Wallet, Activity, CreditCard, ArrowRight
 } from "lucide-react";
 import { toast } from "sonner";
+import Navbar from "@/components/Navbar";
 
 // All data comes from live API — no mock data
 
@@ -112,32 +112,12 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/">
-            <div className="flex items-center gap-3 cursor-pointer">
-              <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
-                <span className="text-white font-bold text-xs">WS</span>
-              </div>
-              <span className="font-semibold text-gray-900 text-sm">WagerSubscribe</span>
-            </div>
-          </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500 hidden md:block">Welcome, {user?.name?.split(" ")[0] ?? user?.email ?? "User"}</span>
-            <Button size="sm" variant="ghost" className="h-8 text-xs" asChild><Link href="/">Home</Link></Button>
-            <Button size="sm" variant="ghost" className="h-8 text-xs" asChild><Link href="/plans">Plans</Link></Button>
-            <Button size="sm" variant="ghost" className="h-8 text-xs" asChild><Link href="/widget">Widget</Link></Button>
-            <Button size="sm" variant="ghost" className="h-8 text-xs" asChild><Link href="/dashboard">Dashboard</Link></Button>
-            <Button size="sm" variant="ghost" className="h-8 text-xs" asChild><Link href="/incentiv-select">Place Prediction</Link></Button>
-            {user?.role === "admin" && (
-              <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" asChild><Link href="/merchant">Merchant Portal</Link></Button>
-            )}
-            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => refetch()}>
-              <RefreshCw className="w-3 h-3" /> Refresh
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Navbar />
+      <div className="max-w-6xl mx-auto px-6 py-2 flex justify-end">
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => refetch()}>
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </Button>
+      </div>
 
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

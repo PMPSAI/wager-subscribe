@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import AuthGuard from "./components/AuthGuard";
 import Home from "./pages/Home";
 import Plans from "./pages/Plans";
 import IncentivSelect from "./pages/WagerSelect";
@@ -18,48 +19,124 @@ import MerchantSettings from "./pages/merchant/MerchantSettings";
 import MerchantProspects from "./pages/merchant/MerchantProspects";
 import Terms from "./pages/Terms";
 import Widget from "./pages/Widget";
-import MerchantSignup from "./pages/MerchantSignup";
+import AuthPage from "./pages/AuthPage";
 import AdminPortal from "./pages/admin/AdminPortal";
 
 function Router() {
   return (
     <Switch>
-      {/* Public */}
+      {/* ── Public ──────────────────────────────────────────────────────── */}
       <Route path="/" component={Home} />
       <Route path="/plans" component={Plans} />
-
-      {/* Post-checkout incentive selection */}
-      <Route path="/incentiv-select" component={IncentivSelect} />
-      <Route path="/wager-select" component={IncentivSelect} />
-
-      {/* Customer dashboard */}
-      <Route path="/dashboard" component={Dashboard} />
-
-      {/* Merchant Signup (public) */}
-      <Route path="/merchant/signup" component={MerchantSignup} />
-
-      {/* Merchant Portal (admin only, guarded inside each page) */}
-      <Route path="/merchant" component={MerchantDashboard} />
-      <Route path="/merchant/campaigns" component={MerchantCampaigns} />
-      <Route path="/merchant/intents" component={MerchantIntents} />
-      <Route path="/merchant/settlements" component={MerchantSettlements} />
-      <Route path="/merchant/resolver" component={MerchantResolver} />
-      <Route path="/merchant/webhook" component={MerchantWebhook} />
-      <Route path="/merchant/settings" component={MerchantSettings} />
-      <Route path="/merchant/prospects" component={MerchantProspects} />
-
-      {/* Admin Portal */}
-      <Route path="/admin" component={AdminPortal} />
-
-      {/* Widget - supports slug routing for merchant-specific embeds */}
+      <Route path="/terms" component={Terms} />
       <Route path="/widget/:slug">
         {(params) => <Widget merchantSlug={params.slug} />}
       </Route>
       <Route path="/widget">{() => <Widget />}</Route>
 
-      {/* Legal */}
-      <Route path="/terms" component={Terms} />
+      {/* ── Auth ────────────────────────────────────────────────────────── */}
+      <Route path="/auth">
+        {() => <AuthPage defaultMode="login" />}
+      </Route>
+      {/* Legacy merchant signup URL — now uses unified auth in signup mode */}
+      <Route path="/merchant/signup">
+        {() => <AuthPage defaultMode="signup" redirectTo="/merchant" />}
+      </Route>
 
+      {/* ── Post-checkout incentive selection (requires auth) ────────────── */}
+      <Route path="/incentiv-select">
+        {() => (
+          <AuthGuard>
+            <IncentivSelect />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/wager-select">
+        {() => (
+          <AuthGuard>
+            <IncentivSelect />
+          </AuthGuard>
+        )}
+      </Route>
+
+      {/* ── Customer dashboard (requires auth) ──────────────────────────── */}
+      <Route path="/dashboard">
+        {() => (
+          <AuthGuard>
+            <Dashboard />
+          </AuthGuard>
+        )}
+      </Route>
+
+      {/* ── Merchant Portal (requires admin role) ───────────────────────── */}
+      <Route path="/merchant">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantDashboard />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/merchant/campaigns">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantCampaigns />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/merchant/intents">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantIntents />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/merchant/settlements">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantSettlements />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/merchant/resolver">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantResolver />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/merchant/webhook">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantWebhook />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/merchant/settings">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantSettings />
+          </AuthGuard>
+        )}
+      </Route>
+
+      {/* ── Admin Portal (requires admin role) ──────────────────────────── */}
+      <Route path="/admin">
+        {() => (
+          <AuthGuard role="admin">
+            <AdminPortal />
+          </AuthGuard>
+        )}
+      </Route>
+      {/* Prospects moved to admin-only */}
+      <Route path="/merchant/prospects">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantProspects />
+          </AuthGuard>
+        )}
+      </Route>
+
+      {/* ── Fallback ────────────────────────────────────────────────────── */}
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

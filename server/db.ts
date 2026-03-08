@@ -76,6 +76,15 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     updateSet[field] = normalized;
   };
   textFields.forEach(assignNullable);
+  // Extra profile & auth fields
+  const extraFields = ["passwordHash", "firstName", "lastName", "phone", "address"] as const;
+  for (const field of extraFields) {
+    const value = (user as Record<string, unknown>)[field];
+    if (value !== undefined) {
+      (values as Record<string, unknown>)[field] = value ?? null;
+      updateSet[field] = value ?? null;
+    }
+  }
   if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
   if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
   else if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; }

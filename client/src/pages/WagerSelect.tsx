@@ -1,5 +1,4 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
@@ -10,6 +9,7 @@ import {
 } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import { useState, useEffect } from "react";
+import Navbar from "@/components/Navbar";
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   market: <TrendingUp size={16} className="text-blue-500" />,
@@ -53,7 +53,7 @@ export default function IncentivSelect() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      window.location.href = getLoginUrl();
+      navigate(`/auth?redirect=${encodeURIComponent("/incentiv-select" + (sessionId ? `?session_id=${sessionId}` : ""))}`);
     }
   }, [authLoading, isAuthenticated]);
 
@@ -176,19 +176,7 @@ export default function IncentivSelect() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container max-w-6xl mx-auto flex items-center justify-between h-16 px-4">
-          <button onClick={() => navigate("/")} className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Zap size={16} className="text-primary-foreground" fill="currentColor" />
-            </div>
-            <span className="font-bold text-foreground text-lg">IncentivPay</span>
-          </button>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 size={14} className="text-green-500" /> Payment confirmed
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       <div className="container max-w-4xl mx-auto py-12 px-4">
         <div className="mb-8">

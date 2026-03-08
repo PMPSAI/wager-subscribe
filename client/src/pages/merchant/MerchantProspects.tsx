@@ -1,4 +1,5 @@
 import MerchantLayout from "@/components/MerchantLayout";
+import AuthGuard from "@/components/AuthGuard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -531,6 +532,7 @@ export default function MerchantProspects() {
   const newProspects = prospects.filter((p) => p.source === "linkedin").length;
 
   return (
+    <AuthGuard role="admin">
     <MerchantLayout>
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
@@ -753,5 +755,6 @@ export default function MerchantProspects() {
         ))}
       </div>
     </MerchantLayout>
+    </AuthGuard>
   );
 }

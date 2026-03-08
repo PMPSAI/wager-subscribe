@@ -1,7 +1,10 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { BarChart3, Megaphone, Target, Wallet, Zap, Webhook, Settings, LogOut, ChevronRight, Users2 } from "lucide-react";
+import {
+  BarChart3, Megaphone, Target, Wallet, Zap, Webhook, Settings,
+  LogOut, ChevronRight, Home, ShieldCheck,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -12,15 +15,25 @@ const navItems = [
   { label: "Settlements", icon: Wallet, href: "/merchant/settlements" },
   { label: "Resolver", icon: Zap, href: "/merchant/resolver" },
   { label: "Webhook Test", icon: Webhook, href: "/merchant/webhook" },
-  { label: "Prospects", icon: Users2, href: "/merchant/prospects" },
   { label: "Settings", icon: Settings, href: "/merchant/settings" },
 ];
 
 export default function MerchantLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [location] = useLocation();
+  const utils = trpc.useUtils();
+
   const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => { logout(); toast.success("Logged out"); },
+    onSuccess: () => {
+      utils.auth.me.setData(undefined, null);
+      utils.auth.me.invalidate();
+      toast.success("Signed out");
+      window.location.href = "/";
+    },
+    onError: () => {
+      utils.auth.me.setData(undefined, null);
+      window.location.href = "/";
+    },
   });
 
   return (
@@ -40,8 +53,26 @@ export default function MerchantLayout({ children }: { children: React.ReactNode
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+        {/* Top utility links */}
+        <div className="px-3 pt-3 pb-1 space-y-0.5 border-b border-gray-100">
+          <Link
+            href="/"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-all"
+          >
+            <Home className="w-3.5 h-3.5 text-gray-400" />
+            Back to Home
+          </Link>
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-violet-600 hover:bg-violet-50 transition-all"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Admin Portal
+          </Link>
+        </div>
+
+        {/* Main Nav */}
+        <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
             const active = location === item.href || (item.href !== "/merchant" && location.startsWith(item.href));
             return (
@@ -68,10 +99,11 @@ export default function MerchantLayout({ children }: { children: React.ReactNode
           <p className="text-xs text-gray-500 truncate mb-2">{user?.email}</p>
           <button
             onClick={() => logoutMutation.mutate()}
-            className="flex items-center gap-2 text-xs text-red-500 hover:text-red-700 transition-colors"
+            disabled={logoutMutation.isPending}
+            className="flex items-center gap-2 text-xs text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
           >
             <LogOut className="w-3.5 h-3.5" />
-            Log out
+            {logoutMutation.isPending ? "Signing out..." : "Sign out"}
           </button>
         </div>
       </aside>

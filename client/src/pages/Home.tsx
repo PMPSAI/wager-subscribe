@@ -1,12 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useAuthMethods } from "@/_core/hooks/useAuthMethods";
-import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Zap, ArrowRight, CheckCircle2, Trophy, TrendingUp, BarChart3, Shield, RefreshCw,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import Navbar from "@/components/Navbar";
 
 const STEPS = [
   {
@@ -43,57 +42,12 @@ const FEATURES = [
 ];
 
 export default function Home() {
-  const { isAuthenticated, user } = useAuth();
-  const { oauth, simpleLogin } = useAuthMethods();
+  const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Nav */}
-      <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container max-w-6xl mx-auto flex items-center justify-between h-16 px-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Zap size={16} className="text-primary-foreground" fill="currentColor" />
-            </div>
-            <span className="font-bold text-foreground text-lg">IncentivPay</span>
-          </div>
-          <nav className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/plans")}>Plans</Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/widget")}>Widget</Button>
-            {isAuthenticated ? (
-              <>
-                <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")} className="gap-1.5">
-                  Dashboard
-                </Button>
-                {user?.role === "admin" && (
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5" onClick={() => navigate("/merchant")}>
-                    Merchant Portal
-                  </Button>
-                )}
-              </>
-            ) : (
-              <>
-                {simpleLogin && (
-                  <Button size="sm" onClick={() => (window.location.href = `${window.location.origin}/api/simple-login`)} className="gap-1.5">
-                    Sign In <ArrowRight size={14} />
-                  </Button>
-                )}
-                {oauth && (
-                  <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
-                    Sign In <ArrowRight size={14} />
-                  </Button>
-                )}
-                {!simpleLogin && !oauth && (
-                  <Button size="sm" variant="outline" onClick={() => navigate("/dashboard")} className="gap-1.5">
-                    View Dashboard
-                  </Button>
-                )}
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      <Navbar />
 
       {/* Hero */}
       <section className="relative overflow-hidden">
