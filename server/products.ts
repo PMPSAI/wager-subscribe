@@ -37,7 +37,7 @@ export const PLANS: Plan[] = [
   {
     tier: "pro",
     name: "Pro",
-    priceId: "price_1T7zNvGi8GTL1o1Rf8yQwTjy",
+    priceId: "prod_U32ECEBgQhMuVa",
     amountCents: 2900,
     currency: "usd",
     features: [
