@@ -51,7 +51,9 @@ import {
   getResolutionByIntentId,
   getSettlementByIntentId,
   getTransactionById,
+  getSubscriptionByStripeId,
   getTransactionBySessionId,
+  updateTransactionStatus,
   getTransactionsByUserId,
   getUserById,
   getUserIntents,
@@ -150,6 +152,75 @@ export const appRouter = router({
         const transaction = await getTransactionBySessionId(input.sessionId);
         if (!transaction) throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found" });
         if (transaction.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+        // ── Webhook fallback: if still pending, ask Stripe directly ──────────
+        // Handles cases where the webhook was delayed, misconfigured, or missed.
+        if (transaction.status === "pending") {
+          try {
+            const stripe = getStripe();
+            const session = await stripe.checkout.sessions.retrieve(input.sessionId, {
+              expand: ["subscription"],
+            });
+            if (session.payment_status === "paid" || session.status === "complete") {
+              const subscriptionId =
+                typeof session.subscription === "string"
+                  ? session.subscription
+                  : (session.subscription as Stripe.Subscription | null)?.id ?? null;
+              const paymentIntentId =
+                typeof session.payment_intent === "string" ? session.payment_intent : null;
+              await updateTransactionStatus(input.sessionId, "completed", {
+                stripePaymentIntentId: paymentIntentId ?? undefined,
+                stripeSubscriptionId: subscriptionId ?? undefined,
+              });
+              const customerId =
+                typeof session.customer === "string" ? session.customer : null;
+              if (customerId) {
+                await updateUserStripeCustomerId(ctx.user.id, customerId);
+              }
+              if (subscriptionId) {
+                const existingSub = await getSubscriptionByStripeId(subscriptionId);
+                if (!existingSub) {
+                  const sub =
+                    typeof session.subscription === "object" && session.subscription !== null
+                      ? (session.subscription as Stripe.Subscription)
+                      : await stripe.subscriptions.retrieve(subscriptionId);
+                  const priceId = sub.items.data[0]?.price.id ?? "";
+                  const currentPeriodEnd = sub.items.data[0]?.current_period_end ?? 0;
+                  const planTier = (session.metadata?.plan_tier ?? "starter") as "starter" | "pro" | "elite";
+                  const planName = session.metadata?.plan_name ?? "Starter";
+                  await upsertSubscription({
+                    userId: ctx.user.id,
+                    stripeSubscriptionId: subscriptionId,
+                    stripeCustomerId: customerId ?? "",
+                    stripePriceId: priceId,
+                    planName,
+                    planTier,
+                    status: "active",
+                    currentPeriodEnd: currentPeriodEnd * 1000,
+                  });
+                }
+              }
+              // Re-read the now-completed transaction
+              const updated = await getTransactionBySessionId(input.sessionId);
+              if (updated) {
+                const existingIncentive = await getIncentiveByTransactionId(updated.id);
+                return {
+                  transaction: updated,
+                  incentive: existingIncentive ?? null,
+                  canSelectIncentive: updated.status === "completed" && !existingIncentive,
+                };
+              }
+            }
+          } catch (stripeErr) {
+            // Non-fatal: log and fall through to return pending status
+            console.warn(
+              "[verifySession] Stripe fallback check failed:",
+              stripeErr instanceof Error ? stripeErr.message : stripeErr
+            );
+          }
+        }
+        // ────────────────────────────────────────────────────────────────────
+
         const existingIncentive = await getIncentiveByTransactionId(transaction.id);
         return {
           transaction,

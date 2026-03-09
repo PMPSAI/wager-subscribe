@@ -87,12 +87,15 @@ export default function IncentivSelect() {
   });
 
   // Auto-poll while payment is pending
+  // The server will query Stripe directly on each poll as a webhook fallback,
+  // so this will resolve as soon as Stripe confirms the payment.
   useEffect(() => {
-    if (sessionData && sessionData.transaction.status === "pending" && pollCount < 10) {
+    if (sessionData && sessionData.transaction.status === "pending" && pollCount < 20) {
+      const interval = pollCount < 5 ? 2000 : 3000; // faster at first, then slow down
       const timer = setTimeout(() => {
         refetchSession();
         setPollCount((c) => c + 1);
-      }, 3000);
+      }, interval);
       return () => clearTimeout(timer);
     }
   }, [sessionData, pollCount, refetchSession]);
@@ -144,12 +147,20 @@ export default function IncentivSelect() {
           </div>
           <h2 className="text-xl font-bold text-foreground">Confirming your payment…</h2>
           <p className="text-muted-foreground text-sm">
-            Stripe is processing your subscription. This usually takes a few seconds.
-            {pollCount > 0 && ` (Attempt ${pollCount}/10)`}
+            {pollCount < 5
+              ? "Stripe is processing your subscription. This usually takes a few seconds."
+              : pollCount < 15
+              ? "Still waiting for Stripe to confirm. Hang tight…"
+              : "This is taking longer than expected. Please contact support if it doesn't resolve."}
           </p>
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 size={14} className="animate-spin" /> Checking payment status…
+            <Loader2 size={14} className="animate-spin" /> Checking payment status… ({pollCount}/20)
           </div>
+          {pollCount >= 20 && (
+            <Button variant="outline" onClick={() => navigate("/dashboard")} className="gap-2">
+              Go to Dashboard <ArrowRight size={16} />
+            </Button>
+          )}
         </div>
       </div>
     );
