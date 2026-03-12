@@ -9,8 +9,8 @@ import { Zap } from "lucide-react";
 
 interface AuthGuardProps {
   children: React.ReactNode;
-  /** If set, user must have this role or be redirected. */
-  role?: "admin" | "user";
+  /** If set, user must have this role or be redirected. admin_or_merchant = admin or user (merchant portal) */
+  role?: "admin" | "user" | "admin_or_merchant";
   /** Where to redirect if auth fails. Defaults to /auth */
   redirectTo?: string;
 }
@@ -25,8 +25,10 @@ export default function AuthGuard({ children, role, redirectTo = "/auth" }: Auth
       navigate(`${redirectTo}?redirect=${encodeURIComponent(location)}`);
       return;
     }
-    if (role && user?.role !== role) {
-      navigate("/");
+    if (role === "admin_or_merchant") {
+      if (user?.role !== "admin" && user?.role !== "user") navigate("/");
+    } else if (role && role !== "admin_or_merchant") {
+      if (user?.role !== role) navigate("/");
     }
   }, [loading, isAuthenticated, user, role, location, navigate, redirectTo]);
 
@@ -44,7 +46,9 @@ export default function AuthGuard({ children, role, redirectTo = "/auth" }: Auth
   }
 
   if (!isAuthenticated) return null;
-  if (role && user?.role !== role) return null;
+  if (role && role !== "admin_or_merchant") {
+    if (user?.role !== role) return null;
+  } else if (role === "admin_or_merchant" && user?.role !== "admin" && user?.role !== "user") return null;
 
   return <>{children}</>;
 }

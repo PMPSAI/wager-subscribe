@@ -29,13 +29,13 @@ export default function MerchantSettings() {
   const [embedTokenTtl, setEmbedTokenTtl] = useState(86400);
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
-  }, [loading, isAuthenticated, user]);
+    if (!loading && !isAuthenticated) navigate("/");
+  }, [loading, isAuthenticated, navigate]);
 
   const utils = trpc.useUtils();
 
   const { data: merchant, isLoading: merchantLoading } = trpc.merchant.get.useQuery(undefined, {
-    enabled: !!user && user.role === "admin",
+    enabled: !!user,
   });
 
   useEffect(() => {

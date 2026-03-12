@@ -19,7 +19,7 @@ export default function MerchantSettlements() {
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
+    if (!loading && !isAuthenticated) navigate("/");
   }, [loading, isAuthenticated, user]);
 
   const utils = trpc.useUtils();

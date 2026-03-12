@@ -69,59 +69,59 @@ function Router() {
         )}
       </Route>
 
-      {/* ── Merchant Portal (requires admin role) ───────────────────────── */}
+      {/* ── Merchant Portal (admin or merchant with account) ───────────────── */}
       <Route path="/merchant">
         {() => (
-          <AuthGuard role="admin">
+          <AuthGuard role="admin_or_merchant">
             <MerchantDashboard />
           </AuthGuard>
         )}
       </Route>
       <Route path="/merchant/campaigns">
         {() => (
-          <AuthGuard role="admin">
+          <AuthGuard role="admin_or_merchant">
             <MerchantCampaigns />
           </AuthGuard>
         )}
       </Route>
       <Route path="/merchant/intents">
         {() => (
-          <AuthGuard role="admin">
+          <AuthGuard role="admin_or_merchant">
             <MerchantIntents />
           </AuthGuard>
         )}
       </Route>
       <Route path="/merchant/predictions">
         {() => (
-          <AuthGuard role="admin">
+          <AuthGuard role="admin_or_merchant">
             <MerchantPredictions />
           </AuthGuard>
         )}
       </Route>
       <Route path="/merchant/settlements">
         {() => (
-          <AuthGuard role="admin">
+          <AuthGuard role="admin_or_merchant">
             <MerchantSettlements />
           </AuthGuard>
         )}
       </Route>
       <Route path="/merchant/resolver">
         {() => (
-          <AuthGuard role="admin">
+          <AuthGuard role="admin_or_merchant">
             <MerchantResolver />
           </AuthGuard>
         )}
       </Route>
       <Route path="/merchant/webhook">
         {() => (
-          <AuthGuard role="admin">
+          <AuthGuard role="admin_or_merchant">
             <MerchantWebhook />
           </AuthGuard>
         )}
       </Route>
       <Route path="/merchant/settings">
         {() => (
-          <AuthGuard role="admin">
+          <AuthGuard role="admin_or_merchant">
             <MerchantSettings />
           </AuthGuard>
         )}

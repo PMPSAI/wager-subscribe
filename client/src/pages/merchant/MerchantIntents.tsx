@@ -45,8 +45,8 @@ export default function MerchantIntents() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
-  }, [loading, isAuthenticated, user]);
+    if (!loading && !isAuthenticated) navigate("/");
+  }, [loading, isAuthenticated, navigate]);
 
   const utils = trpc.useUtils();
   const { data: intents, isLoading, refetch } = trpc.intent.list.useQuery(undefined, {

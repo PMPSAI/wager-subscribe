@@ -39,7 +39,7 @@ export default function MerchantWebhook() {
   });
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
+    if (!loading && !isAuthenticated) navigate("/");
   }, [loading, isAuthenticated, user]);
 
   const sendTestWebhook = async (eventType: string) => {

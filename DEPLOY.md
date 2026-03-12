@@ -49,6 +49,7 @@ The app uses **MySQL** (Drizzle + mysql2). Use one of:
    | `ENABLE_SIMPLE_LOGIN` | (Optional) Set to `1` or `true` to allow sign-in without OAuth via **Sign in without OAuth** | `1` |
    | `SIMPLE_LOGIN_EMAIL` | (Optional) Email for the simple-login user when `ENABLE_SIMPLE_LOGIN` is set | `demo@local` |
    | `SIMPLE_LOGIN_NAME` | (Optional) Display name for the simple-login user | `Demo User` |
+   | `VITE_APP_URL` | (Optional) App base URL for widget redirects when embedded; e.g. `https://wager-subscribe.vercel.app` | `https://your-app.vercel.app` |
 
    Set them for **Production** (and **Preview** if you want).
 

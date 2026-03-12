@@ -321,8 +321,11 @@ export const appRouter = router({
   // ─── Campaigns ──────────────────────────────────────────────────────────────
   campaign: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      requireAdmin(ctx.user.role);
-      return getAllCampaigns();
+      const all = await getAllCampaigns();
+      if (ctx.user.role === "admin") return all;
+      const merchant = await getMerchantByUserId(ctx.user.id);
+      if (!merchant) return all.filter((c: any) => c.merchantId == null);
+      return all.filter((c: any) => c.merchantId == null || c.merchantId === merchant.id);
     }),
     /** Public: list active campaigns with their options (for widget) */
     listPublic: publicProcedure.query(async () => {
@@ -682,7 +685,6 @@ export const appRouter = router({
   // ─── Merchant Portal KPIs ────────────────────────────────────────────────────
   merchant: router({
     kpis: protectedProcedure.query(async ({ ctx }) => {
-      requireAdmin(ctx.user.role);
       const kpis = await getMerchantKPIs();
       const base = kpis ?? {
         intents7d: 0,
@@ -744,7 +746,8 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx.user.role);
+        const existing = await getMerchantByUserId(ctx.user.id);
+        if (existing) throw new TRPCError({ code: "BAD_REQUEST", message: "You already have a merchant account" });
         const result = await createMerchant({ ...input, userId: ctx.user.id });
         return result;
       }),
@@ -791,8 +794,9 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        requireAdmin(ctx.user.role);
         const { id, ...data } = input;
+        const own = await getMerchantByUserId(ctx.user.id);
+        if (own?.id !== id) requireAdmin(ctx.user.role);
         await updateMerchant(id, data);
         return { success: true };
       }),
@@ -812,6 +816,8 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const { merchantId, ttlSeconds } = input;
+        const own = await getMerchantByUserId(ctx.user.id);
+        if (!own || own.id !== merchantId) throw new TRPCError({ code: "FORBIDDEN", message: "You can only create tokens for your own merchant" });
         await cleanExpiredEmbedTokens();
         const token = crypto.randomUUID();
         const expiresAt = new Date(Date.now() + ttlSeconds * 1000);

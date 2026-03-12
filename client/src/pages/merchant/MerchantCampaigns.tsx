@@ -20,7 +20,7 @@ export default function MerchantCampaigns() {
   const [form, setForm] = useState({ name: "", description: "", category: "market", conditionText: "", windowDays: "30", rewardType: "MONTHS_FREE", rewardValue: "1" });
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
+    if (!loading && !isAuthenticated) navigate("/");
   }, [loading, isAuthenticated, user]);
 
   const utils = trpc.useUtils();

@@ -37,12 +37,12 @@ export default function MerchantDashboard() {
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || user?.role !== "admin")) navigate("/");
+    if (!loading && !isAuthenticated) navigate("/");
   }, [loading, isAuthenticated, user]);
 
   const utils = trpc.useUtils();
-  const { data: kpis, isLoading, refetch } = trpc.merchant.kpis.useQuery(undefined, { enabled: !!user && user.role === "admin" });
-  const { data: campaigns } = trpc.campaign.list.useQuery(undefined, { enabled: !!user && user.role === "admin" });
+  const { data: kpis, isLoading, refetch } = trpc.merchant.kpis.useQuery(undefined, { enabled: !!user });
+  const { data: campaigns } = trpc.campaign.list.useQuery(undefined, { enabled: !!user });
   const resolverMutation = trpc.resolver.runWeekly.useMutation({
     onSuccess: (data) => {
       toast.success(`Resolver complete: ${data.wins} wins, ${data.losses} losses out of ${data.processed} intents`);
@@ -68,14 +68,16 @@ export default function MerchantDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">Overview of your campaign performance</p>
         </div>
-        <Button
-          onClick={() => resolverMutation.mutate()}
-          disabled={resolverMutation.isPending}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-        >
-          <Zap className="w-4 h-4" />
-          {resolverMutation.isPending ? "Running..." : "Run Weekly Resolution"}
-        </Button>
+        {user?.role === "admin" && (
+          <Button
+            onClick={() => resolverMutation.mutate()}
+            disabled={resolverMutation.isPending}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+          >
+            <Zap className="w-4 h-4" />
+            {resolverMutation.isPending ? "Running..." : "Run Weekly Resolution"}
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -148,14 +150,16 @@ export default function MerchantDashboard() {
               <span className="text-sm text-gray-500">Retry Queue</span>
               <span className="text-sm font-medium text-gray-900">{kpis?.retryQueueSize ?? 0} pending</span>
             </div>
-            <Button
-              variant="outline"
-              className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
-              disabled={pauseAllMutation.isPending}
-              onClick={() => pauseAllMutation.mutate()}
-            >
-              Pause All Campaigns (Kill Switch)
-            </Button>
+            {user?.role === "admin" && (
+              <Button
+                variant="outline"
+                className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                disabled={pauseAllMutation.isPending}
+                onClick={() => pauseAllMutation.mutate()}
+              >
+                Pause All Campaigns (Kill Switch)
+              </Button>
+            )}
           </CardContent>
         </Card>
 
