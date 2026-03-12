@@ -45,9 +45,14 @@ import {
   getMerchantById,
   getMerchantKPIs,
   getOptionById,
+  getOptionByPredictionMarketId,
   getOptionsByCampaign,
+  getOrCreateIncentiveOptionForMarket,
   getOrCreateRewardBalance,
   getPredictionMarketById,
+  getIntentsByMerchantId,
+  getUserByOpenId,
+  upsertUser,
   getResolutionByIntentId,
   getSettlementByIntentId,
   getTransactionById,
@@ -453,6 +458,66 @@ export const appRouter = router({
 
     myIntents: protectedProcedure.query(async ({ ctx }) => getUserIntents(ctx.user.id)),
 
+    /** Public: widget flow – record prediction choice (yes/no) from member */
+    recordPrediction: publicProcedure
+      .input(z.object({
+        sessionToken: z.string().min(1),
+        predictionMarketId: z.number().int().positive(),
+        userChoice: z.enum(["yes", "no"]),
+      }))
+      .mutation(async ({ input }) => {
+        const member = await getMemberBySessionToken(input.sessionToken);
+        if (!member) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid or expired session" });
+        if (member.sessionExpiresAt && member.sessionExpiresAt < new Date()) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Session expired" });
+        }
+
+        const market = await getPredictionMarketById(input.predictionMarketId);
+        if (!market || !market.isEnabled) throw new TRPCError({ code: "NOT_FOUND", message: "Market not found or not enabled for predictions" });
+        const option = await getOrCreateIncentiveOptionForMarket(input.predictionMarketId);
+        if (!option) throw new TRPCError({ code: "NOT_FOUND", message: "Failed to get prediction option" });
+
+        const campaign = await getCampaignById(option.campaignId);
+        if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
+
+        const openId = `member-${member.id}`;
+        await upsertUser({
+          openId,
+          email: member.email,
+          name: member.firstName && member.lastName ? `${member.firstName} ${member.lastName}` : member.email,
+        });
+        const user = await getUserByOpenId(openId);
+        if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user" });
+
+        const resolveAt = new Date();
+        resolveAt.setDate(resolveAt.getDate() + option.resolutionWindowDays);
+
+        await createIntent({
+          userId: user.id,
+          merchantId: member.merchantId,
+          campaignId: campaign.id,
+          incentiveOptionId: option.id,
+          userChoice: input.userChoice,
+          status: "TRACKING",
+          resolveAt,
+          termsSnapshot: {
+            conditionKey: option.conditionKey,
+            conditionLabel: option.conditionLabel ?? "",
+            conditionDescription: option.conditionDescription ?? "",
+            rewardValueUsd: parseFloat(option.rewardValueUsd),
+            rewardLabel: option.rewardLabel ?? "",
+            resolutionWindowDays: option.resolutionWindowDays,
+            dataSource: option.dataSource ?? "",
+            termsText: "",
+            lockedAt: new Date().toISOString(),
+            predictionMarketId: market?.id,
+            yesPrice: market?.yesPrice ? parseFloat(market.yesPrice) : undefined,
+            noPrice: market?.noPrice ? parseFloat(market.noPrice) : undefined,
+          },
+        });
+        return { success: true } as const;
+      }),
+
     list: protectedProcedure.query(async ({ ctx }) => {
       requireAdmin(ctx.user.role);
       return getAllIntents();
@@ -562,8 +627,25 @@ export const appRouter = router({
           if (existing) continue;
           const option = await getOptionById(intent.incentiveOptionId);
           if (!option) continue;
-          // Simulate outcome (in production: call real data source)
-          const outcome: "WIN" | "LOSS" = Math.random() > 0.5 ? "WIN" : "LOSS";
+
+          let outcome: "WIN" | "LOSS" | null = null;
+          // Use prediction market resolution when available
+          if (option.predictionMarketId) {
+            const market = await getPredictionMarketById(option.predictionMarketId);
+            if (market?.resolvedOutcome && market?.resolvedAt) {
+              const userChoice = (intent.userChoice ?? "").toLowerCase();
+              if (userChoice === "yes") {
+                outcome = (market.resolvedOutcome?.toLowerCase() === "yes") ? "WIN" : "LOSS";
+              } else if (userChoice === "no") {
+                outcome = (market.resolvedOutcome?.toLowerCase() === "no") ? "WIN" : "LOSS";
+              }
+            }
+          }
+          // Fallback: simulate outcome for non-prediction-market intents
+          if (outcome === null) {
+            outcome = Math.random() > 0.5 ? "WIN" : "LOSS";
+          }
+
           await createResolution({ intentId: intent.id, outcome, proofJson: { source: "weekly_resolver", simulatedAt: new Date().toISOString() } });
           if (outcome === "WIN") {
             wins++;
@@ -670,6 +752,13 @@ export const appRouter = router({
     get: protectedProcedure.query(async ({ ctx }) => {
       const merchant = await getMerchantByUserId(ctx.user.id);
       return merchant ?? null;
+    }),
+
+    /** List predictions from widget customers for this merchant */
+    listPredictions: protectedProcedure.query(async ({ ctx }) => {
+      const merchant = await getMerchantByUserId(ctx.user.id);
+      if (!merchant) return [];
+      return getIntentsByMerchantId(merchant.id);
     }),
 
     getById: protectedProcedure
@@ -876,6 +965,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         requireAdmin(ctx.user.role);
         await updatePredictionMarket(input.id, { isEnabled: input.isEnabled });
+        if (input.isEnabled) {
+          await getOrCreateIncentiveOptionForMarket(input.id);
+        }
         return { success: true };
       }),
 

@@ -65,11 +65,13 @@ export default function Widget({ merchantSlug }: WidgetProps) {
   const [memberLastName, setMemberLastName] = useState("");
   const [signingUp, setSigningUp] = useState(false);
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
+  const [userChoice, setUserChoice] = useState<"yes" | "no" | null>(null);
 
   const { data: plansData, isLoading: plansLoading } = trpc.subscription.plans.useQuery();
   const plans = plansData?.plans;
   const { data: enabledMarkets } = trpc.markets.listEnabled.useQuery();
   const memberSignup = trpc.member.signup.useMutation();
+  const recordPrediction = trpc.intent.recordPrediction.useMutation();
   const memberVerify = trpc.member.verify.useQuery(
     { sessionToken: memberToken ?? "" },
     { enabled: !!memberToken }
@@ -372,7 +374,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
                 {enabledMarkets.map((m: any) => (
                   <div
                     key={m.id}
-                    onClick={() => setSelectedCondition(String(m.id))}
+                    onClick={() => { setSelectedCondition(String(m.id)); setUserChoice(null); }}
                     className={`bg-white rounded-xl border-2 p-5 cursor-pointer transition-all hover:shadow-md ${
                       selectedCondition === String(m.id) ? "border-emerald-500 shadow-md" : "border-gray-200"
                     }`}
@@ -399,9 +401,26 @@ export default function Widget({ merchantSlug }: WidgetProps) {
                       </div>
                     )}
                     {selectedCondition === String(m.id) && (
-                      <div className="mt-3 flex items-center gap-1.5 text-emerald-600 text-sm font-medium">
-                        <CheckCircle2 size={14} />
-                        Selected
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setUserChoice("yes"); }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                            userChoice === "yes" ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          }`}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setUserChoice("no"); }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                            userChoice === "no" ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          }`}
+                        >
+                          No
+                        </button>
+                        {userChoice && <CheckCircle2 size={14} className="text-emerald-600" />}
                       </div>
                     )}
                   </div>
@@ -418,11 +437,33 @@ export default function Widget({ merchantSlug }: WidgetProps) {
             {selectedCondition && (
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => setStep("tracking")}
-                  className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-colors inline-flex items-center gap-2"
+                  onClick={async () => {
+                    const marketId = parseInt(selectedCondition, 10);
+                    if (memberToken && userChoice) {
+                      try {
+                        await recordPrediction.mutateAsync({
+                          sessionToken: memberToken,
+                          predictionMarketId: marketId,
+                          userChoice,
+                        });
+                        toast.success("Prediction saved!");
+                      } catch (e: any) {
+                        toast.error(e.message || "Failed to save prediction");
+                        return;
+                      }
+                    } else if (!memberToken) {
+                      toast("Sign up to save your prediction to your account", { type: "info" });
+                    }
+                    setStep("tracking");
+                  }}
+                  disabled={!userChoice || recordPrediction.isPending}
+                  className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors inline-flex items-center gap-2"
                 >
-                  Confirm Prediction <ArrowRight size={16} />
+                  {recordPrediction.isPending ? "Saving..." : "Confirm Prediction"} <ArrowRight size={16} />
                 </button>
+                {!userChoice && (
+                  <p className="text-sm text-amber-600 mt-2">Select Yes or No above to confirm</p>
+                )}
               </div>
             )}
           </div>

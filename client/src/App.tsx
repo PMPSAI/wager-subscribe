@@ -17,6 +17,7 @@ import MerchantResolver from "./pages/merchant/MerchantResolver";
 import MerchantWebhook from "./pages/merchant/MerchantWebhook";
 import MerchantSettings from "./pages/merchant/MerchantSettings";
 import MerchantProspects from "./pages/merchant/MerchantProspects";
+import MerchantPredictions from "./pages/merchant/MerchantPredictions";
 import Terms from "./pages/Terms";
 import Widget from "./pages/Widget";
 import AuthPage from "./pages/AuthPage";
@@ -87,6 +88,13 @@ function Router() {
         {() => (
           <AuthGuard role="admin">
             <MerchantIntents />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/merchant/predictions">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantPredictions />
           </AuthGuard>
         )}
       </Route>

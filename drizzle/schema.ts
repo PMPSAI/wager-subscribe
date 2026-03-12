@@ -191,6 +191,7 @@ export type InsertIncentiveOption = typeof incentiveOptions.$inferInsert;
 export const intents = pgTable("intents", {
   id: serial("id").primaryKey(),
   userId: integer("userId").notNull(),
+  merchantId: integer("merchantId"),
   transactionId: integer("transactionId"),
   campaignId: integer("campaignId").notNull(),
   incentiveOptionId: integer("incentiveOptionId").notNull(),

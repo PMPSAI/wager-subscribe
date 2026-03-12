@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   BarChart3, Megaphone, Target, Wallet, Zap, Webhook, Settings,
-  LogOut, ChevronRight, Home, ShieldCheck,
+  LogOut, ChevronRight, Home, ShieldCheck, TrendingUp,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ const navItems = [
   { label: "Dashboard", icon: BarChart3, href: "/merchant" },
   { label: "Campaigns", icon: Megaphone, href: "/merchant/campaigns" },
   { label: "Intents", icon: Target, href: "/merchant/intents" },
+  { label: "Widget Predictions", icon: TrendingUp, href: "/merchant/predictions" },
   { label: "Settlements", icon: Wallet, href: "/merchant/settlements" },
   { label: "Resolver", icon: Zap, href: "/merchant/resolver" },
   { label: "Webhook Test", icon: Webhook, href: "/merchant/webhook" },

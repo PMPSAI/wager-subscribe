@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import {
@@ -209,6 +209,30 @@ export async function getCampaignById(id: number) {
   return result[0];
 }
 
+export async function getCampaignByNameAndMerchantId(name: string, merchantId: number | null) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const cond = merchantId === null ? and(eq(campaigns.name, name), isNull(campaigns.merchantId)) : and(eq(campaigns.name, name), eq(campaigns.merchantId, merchantId));
+  const result = await db.select().from(campaigns).where(cond).limit(1);
+  return result[0];
+}
+
+export async function getOrCreateWidgetPredictionsCampaign() {
+  const db = await getDb();
+  if (!db) return null;
+  const existing = await getCampaignByNameAndMerchantId("Widget Predictions", null);
+  if (existing) return existing;
+  const [inserted] = await db.insert(campaigns).values({
+    name: "Widget Predictions",
+    merchantId: null,
+    stripePriceIds: [],
+    category: "market",
+    status: "ACTIVE",
+    isActive: true,
+  }).returning();
+  return inserted ?? null;
+}
+
 export async function createCampaign(data: InsertCampaign) {
   const db = await getDb();
   if (!db) return;
@@ -255,12 +279,44 @@ export async function getOptionById(id: number) {
   return result[0];
 }
 
+export async function getOptionByPredictionMarketId(predictionMarketId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(incentiveOptions).where(eq(incentiveOptions.predictionMarketId, predictionMarketId)).limit(1);
+  return result[0];
+}
+
+export async function getOrCreateIncentiveOptionForMarket(predictionMarketId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  let option = await getOptionByPredictionMarketId(predictionMarketId);
+  if (option) return option;
+  const campaign = await getOrCreateWidgetPredictionsCampaign();
+  if (!campaign) return null;
+  const market = await getPredictionMarketById(predictionMarketId);
+  if (!market) return null;
+  const [inserted] = await db.insert(incentiveOptions).values({
+    campaignId: campaign.id,
+    conditionKey: `market-${market.externalId}`,
+    conditionLabel: market.title?.slice(0, 255) ?? `Market ${market.id}`,
+    conditionDescription: market.description ?? undefined,
+    category: "market",
+    rewardValueUsd: "0",
+    resolutionWindowDays: 30,
+    dataSource: market.source,
+    predictionMarketId: market.id,
+    isActive: true,
+  }).returning();
+  return inserted ?? null;
+}
+
 // ─── Intents ──────────────────────────────────────────────────────────────────
 
 export async function createIntent(data: InsertIntent) {
   const db = await getDb();
-  if (!db) return;
-  await db.insert(intents).values(data);
+  if (!db) return undefined;
+  const [result] = await db.insert(intents).values(data).returning({ id: intents.id });
+  return result?.id;
 }
 
 export async function getUserIntents(userId: number) {
@@ -293,6 +349,12 @@ export async function getIntentsDueForResolution() {
   if (!db) return [];
   const now = new Date();
   return db.select().from(intents).where(and(eq(intents.status, "TRACKING"), lt(intents.resolveAt, now)));
+}
+
+export async function getIntentsByMerchantId(merchantId: number, limit = 200) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(intents).where(eq(intents.merchantId, merchantId)).orderBy(desc(intents.createdAt)).limit(limit);
 }
 
 // ─── Resolutions ──────────────────────────────────────────────────────────────
