@@ -27,6 +27,7 @@ export default function MerchantSettings() {
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [embedTokenTtl, setEmbedTokenTtl] = useState(86400);
+  const [lastEmbedToken, setLastEmbedToken] = useState<string | null>(null);
   const [stripePriceStarter, setStripePriceStarter] = useState("");
   const [stripePricePro, setStripePricePro] = useState("");
   const [stripePriceElite, setStripePriceElite] = useState("");
@@ -73,6 +74,7 @@ export default function MerchantSettings() {
 
   const createEmbedToken = trpc.merchant.createEmbedToken.useMutation({
     onSuccess: (data) => {
+      setLastEmbedToken(data.token);
       toast.success("Embed token generated!");
       navigator.clipboard.writeText(data.token);
       toast.info("Token copied to clipboard");
@@ -117,7 +119,8 @@ export default function MerchantSettings() {
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://wager-subscribe.vercel.app";
   const successRedirectPattern = `${origin}/incentiv-select?session_id={CHECKOUT_SESSION_ID}`;
-  const widgetUrl = `${origin}/widget`;
+  const widgetBaseUrl = `${origin}/widget`;
+  const widgetUrl = lastEmbedToken ? `${widgetBaseUrl}?token=${lastEmbedToken}` : widgetBaseUrl;
   const embedSnippet = `<!-- WagerSubscribe Widget -->
 <script src="${origin}/embed.js"></script>
 <div id="wager-subscribe-widget"></div>
@@ -127,7 +130,7 @@ export default function MerchantSettings() {
   });
 </script>`;
   const iframeSnippet = `<iframe
-  src="${widgetUrl}?embed=1&token=YOUR_EMBED_TOKEN"
+  src="${widgetBaseUrl}?embed=1&token=YOUR_EMBED_TOKEN"
   width="100%" height="600"
   frameborder="0"
   style="border-radius:12px;border:1px solid #e5e7eb;"

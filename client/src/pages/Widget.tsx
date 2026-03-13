@@ -48,9 +48,19 @@ export default function Widget({ merchantSlug }: WidgetProps) {
   const search = useSearch();
   const urlParams = new URLSearchParams(search);
   const sessionId = urlParams.get("session_id");
-  // Support slug from URL param too
   const slugParam = urlParams.get("slug");
-  const effectiveSlug = merchantSlug || slugParam || "wager-demo";
+  const embedToken = urlParams.get("token");
+
+  // Resolve merchant slug: prop > URL slug > embed token (verify returns slug) > demo
+  const { data: embedVerify, isFetched: embedVerifyFetched } = trpc.merchant.verifyEmbedToken.useQuery(
+    { token: embedToken ?? "" },
+    { enabled: !!embedToken }
+  );
+  const slugFromToken = embedVerify?.valid ? embedVerify.merchantSlug : undefined;
+  const effectiveSlug = merchantSlug || slugParam || slugFromToken || "wager-demo";
+
+  // When token is present, wait for verification before fetching plans so we show merchant prices
+  const plansReady = !embedToken || embedVerifyFetched;
 
   const [step, setStep] = useState<Step>("plan");
   const [selectedTier, setSelectedTier] = useState<"starter" | "pro" | "elite" | null>(null);
@@ -67,9 +77,10 @@ export default function Widget({ merchantSlug }: WidgetProps) {
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
   const [userChoice, setUserChoice] = useState<"yes" | "no" | null>(null);
 
-  const { data: plansData, isLoading: plansLoading } = trpc.subscription.plans.useQuery({
-    merchantSlug: effectiveSlug === "wager-demo" ? undefined : effectiveSlug,
-  });
+  const { data: plansData, isLoading: plansLoading } = trpc.subscription.plans.useQuery(
+    { merchantSlug: effectiveSlug === "wager-demo" ? undefined : effectiveSlug },
+    { enabled: plansReady }
+  );
   const plans = plansData?.plans;
   const { data: enabledMarkets } = trpc.markets.listEnabled.useQuery();
   const memberSignup = trpc.member.signup.useMutation();

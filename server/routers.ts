@@ -903,7 +903,8 @@ export const appRouter = router({
         if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Token not found" });
         if (record.revoked) throw new TRPCError({ code: "FORBIDDEN", message: "Token has been revoked" });
         if (record.expiresAt < new Date()) throw new TRPCError({ code: "FORBIDDEN", message: "Token has expired" });
-        return { valid: true, merchantId: record.merchantId, userId: record.userId };
+        const merchant = await getMerchantById(record.merchantId);
+        return { valid: true, merchantId: record.merchantId, userId: record.userId, merchantSlug: merchant?.slug ?? undefined };
       }),
   }),
 
