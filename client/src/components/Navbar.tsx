@@ -1,7 +1,7 @@
 /**
  * Shared top navigation bar used on all public-facing pages.
  * Always shows: Logo (→ Home), Plans, Widget.
- * When authenticated: Dashboard, and Merchant Portal (admin only).
+ * When authenticated: Dashboard, Merchant Portal (admin or merchant), Admin (admin only).
  * When not authenticated: Sign In button.
  * Logout is available via a dropdown on the user avatar/name.
  */
@@ -23,6 +23,9 @@ export default function Navbar() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
+  const { data: merchant } = trpc.merchant.get.useQuery(undefined, { enabled: !!isAuthenticated && !!user });
+
+  const showMerchantPortal = user?.role === "admin" || !!merchant;
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
@@ -64,7 +67,7 @@ export default function Navbar() {
                   <LayoutDashboard size={14} />
                   Dashboard
                 </Button>
-                {user?.role === "admin" && (
+                {showMerchantPortal && (
                   <Button
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 ml-1"
@@ -97,7 +100,7 @@ export default function Navbar() {
                     <DropdownMenuItem onClick={() => navigate("/dashboard")}>
                       <LayoutDashboard className="mr-2 h-4 w-4" /> My Dashboard
                     </DropdownMenuItem>
-                    {user?.role === "admin" && (
+                    {showMerchantPortal && (
                       <DropdownMenuItem onClick={() => navigate("/merchant")}>
                         <Settings className="mr-2 h-4 w-4" /> Merchant Portal
                       </DropdownMenuItem>
