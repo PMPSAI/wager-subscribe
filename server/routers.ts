@@ -54,6 +54,7 @@ import {
   getPredictionMarketById,
   getIntentsByMerchantId,
   getUserByOpenId,
+  getUserIdsByEmail,
   upsertUser,
   getResolutionByIntentId,
   getSettlementByIntentId,
@@ -1239,14 +1240,26 @@ export const appRouter = router({
   // ─── Customer Dashboard ──────────────────────────────────────────────────────
   dashboard: router({
     summary: protectedProcedure.query(async ({ ctx }) => {
-      const [activeSub, incentiveList, txList, myIntents, balance, ledgerEntries] = await Promise.all([
+      // Include intents from all users with same email (member-user + main account)
+      const linkedIds = await getUserIdsByEmail(ctx.user.email);
+      const userIds = Array.from(new Set([ctx.user.id, ...linkedIds]));
+      const [activeSub, incentiveList, txList, intentArrays, balance, ledgerEntries] = await Promise.all([
         getActiveSubscriptionByUserId(ctx.user.id),
         getIncentivesByUserId(ctx.user.id),
         getTransactionsByUserId(ctx.user.id),
-        getUserIntents(ctx.user.id),
+        Promise.all(userIds.map((uid) => getUserIntents(uid))),
         getOrCreateRewardBalance(ctx.user.id),
         getLedgerByUser(ctx.user.id, 20),
       ]);
+      const seen = new Set<number>();
+      const myIntents = ([] as Awaited<ReturnType<typeof getUserIntents>>)
+        .concat(...intentArrays)
+        .filter((i) => {
+          if (seen.has(i.id)) return false;
+          seen.add(i.id);
+          return true;
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       const txMap = new Map(txList.map((t) => [t.id, t]));
       const incentivesWithTx = incentiveList.map((i) => ({ ...i, transaction: txMap.get(i.transactionId ?? -1) ?? null }));
       const achieved = incentivesWithTx.filter((i) => i.status === "achieved");

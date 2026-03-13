@@ -100,6 +100,16 @@ export async function getUserByOpenId(openId: string) {
   return result[0];
 }
 
+/** Get user IDs with the given email (links member intents to main account). Case-insensitive. */
+export async function getUserIdsByEmail(email: string | null | undefined): Promise<number[]> {
+  if (!email?.trim()) return [];
+  const db = await getDb();
+  if (!db) return [];
+  const lower = email.trim().toLowerCase();
+  const rows = await db.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${lower}`);
+  return rows.map((r) => r.id);
+}
+
 export async function updateUserStripeCustomerId(userId: number, stripeCustomerId: string) {
   const db = await getDb();
   if (!db) return;

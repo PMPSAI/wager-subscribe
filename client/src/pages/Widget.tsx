@@ -250,6 +250,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
   const { data: enabledMarkets } = trpc.markets.listEnabled.useQuery();
   const memberSignup = trpc.member.signup.useMutation();
   const recordPrediction = trpc.intent.recordPrediction.useMutation();
+  const utils = trpc.useUtils();
   const memberVerify = trpc.member.verify.useQuery(
     { sessionToken: memberToken ?? "" },
     { enabled: !!memberToken }
@@ -582,6 +583,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
                           predictionMarketId: marketId,
                           userChoice,
                         });
+                        utils.dashboard.summary.invalidate();
                         toast.success("Prediction saved!");
                       } catch (e: any) {
                         toast.error(e.message || "Failed to save prediction");
@@ -640,6 +642,9 @@ export default function Widget({ merchantSlug }: WidgetProps) {
                   Add Another
                 </button>
               </div>
+              {(memberVerify.data?.member?.email || memberEmail) && (
+                <p className="text-xs text-gray-500 text-center mt-3">Log in with <strong>{memberVerify.data?.member?.email || memberEmail}</strong> to see your predictions on the Dashboard.</p>
+              )}
             </div>
           </div>
         )}
