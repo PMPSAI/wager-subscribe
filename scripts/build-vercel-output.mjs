@@ -136,6 +136,15 @@ fs.writeFileSync(
 );
 
 // 4. Build Output API v3 config: filesystem first, then catch-all to function
+// overrides: set explicit MIME for JS/CSS to prevent "expected JS but got HTML" errors
+const assetOverrides = {};
+const assetsDir = path.join(staticDir, "assets");
+if (fs.existsSync(assetsDir)) {
+  for (const name of fs.readdirSync(assetsDir)) {
+    if (name.endsWith(".js")) assetOverrides[`assets/${name}`] = { contentType: "application/javascript" };
+    if (name.endsWith(".css")) assetOverrides[`assets/${name}`] = { contentType: "text/css" };
+  }
+}
 fs.writeFileSync(
   path.join(outDir, "config.json"),
   JSON.stringify(
@@ -145,6 +154,10 @@ fs.writeFileSync(
         { handle: "filesystem" },
         { src: "/(.*)", dest: "/render" },
       ],
+      overrides: {
+        "index.html": { contentType: "text/html" },
+        ...assetOverrides,
+      },
     },
     null,
     2
