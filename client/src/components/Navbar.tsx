@@ -23,9 +23,8 @@ export default function Navbar() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
-  const { data: merchant } = trpc.merchant.get.useQuery(undefined, { enabled: !!isAuthenticated && !!user });
-
-  const showMerchantPortal = user?.role === "admin" || !!merchant;
+  // Show Merchant Portal to all authenticated users so they can create a merchant account in Settings if needed
+  const showMerchantPortal = isAuthenticated && !!user;
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
