@@ -43,6 +43,7 @@ import {
   getMembersByMerchant,
   getMerchantByUserId,
   getMerchantById,
+  getMerchantBySlug,
   getMerchantKPIs,
   getOptionById,
   getOptionByPredictionMarketId,
@@ -108,30 +109,75 @@ export const appRouter = router({
     plans: publicProcedure.query(() => ({ plans: PLANS, stripeMode: getStripeMode() })),
 
     createCheckoutSession: protectedProcedure
-      .input(z.object({ planTier: z.enum(["starter", "pro", "elite"]) }))
+      .input(
+        z.object({
+          planTier: z.enum(["starter", "pro", "elite"]),
+          merchantSlug: z.string().optional(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
-        let stripe: Stripe;
-        try {
-          stripe = getStripe();
-        } catch (err) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: err instanceof Error ? err.message : "Stripe is not configured",
-          });
-        }
         const plan = PLANS.find((p) => p.tier === input.planTier);
         if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid plan" });
         const origin = (ctx.req.headers.origin as string) || "http://localhost:3000";
+
+        let stripe: Stripe;
+        let priceId: string;
+        let planName = plan.name;
+        let amountCents = plan.amountCents;
+        const currency = plan.currency;
+
+        if (input.merchantSlug) {
+          const merchant = await getMerchantBySlug(input.merchantSlug);
+          const priceIds = merchant?.stripePlanPriceIds as Record<string, string> | null | undefined;
+          const merchantPriceId = priceIds?.[input.planTier];
+          if (
+            merchant &&
+            merchant.stripeAccessToken &&
+            merchantPriceId
+          ) {
+            stripe = new Stripe(merchant.stripeAccessToken, {
+              apiVersion: "2026-02-25.clover",
+            });
+            priceId = merchantPriceId;
+            planName = `${merchant.name} - ${plan.name}`;
+          } else if (merchant) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Merchant has not configured Stripe plan prices for this tier. Add price IDs in Settings.",
+            });
+          } else {
+            try {
+              stripe = getStripe();
+              priceId = plan.priceId;
+            } catch (err) {
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message: err instanceof Error ? err.message : "Stripe is not configured",
+              });
+            }
+          }
+        } else {
+          try {
+            stripe = getStripe();
+          } catch (err) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: err instanceof Error ? err.message : "Stripe is not configured",
+            });
+          }
+          priceId = plan.priceId;
+        }
+
         const session = await stripe.checkout.sessions.create({
           mode: "subscription",
-          line_items: [{ price: plan.priceId, quantity: 1 }],
+          line_items: [{ price: priceId, quantity: 1 }],
           customer_email: ctx.user.email ?? undefined,
           allow_promotion_codes: true,
           client_reference_id: ctx.user.id.toString(),
           metadata: {
             user_id: ctx.user.id.toString(),
             plan_tier: plan.tier,
-            plan_name: plan.name,
+            plan_name: planName,
             customer_email: ctx.user.email ?? "",
             customer_name: ctx.user.name ?? "",
           },
@@ -141,10 +187,10 @@ export const appRouter = router({
         await createTransaction({
           userId: ctx.user.id,
           stripeSessionId: session.id,
-          planName: plan.name,
+          planName,
           planTier: plan.tier,
-          amountCents: plan.amountCents,
-          currency: plan.currency,
+          amountCents,
+          currency,
           status: "pending",
           incentiveSelected: 0,
         });
@@ -742,6 +788,7 @@ export const appRouter = router({
           stripePublishableKey: z.string().optional(),
           stripeWebhookEndpointId: z.string().optional(),
           stripeWebhookSecret: z.string().optional(),
+          stripePlanPriceIds: z.record(z.string()).optional(),
           isActive: z.boolean().optional(),
         })
       )
@@ -790,6 +837,7 @@ export const appRouter = router({
           stripePublishableKey: z.string().optional(),
           stripeWebhookEndpointId: z.string().optional(),
           stripeWebhookSecret: z.string().optional(),
+          stripePlanPriceIds: z.record(z.string()).optional(),
           isActive: z.boolean().optional(),
         })
       )

@@ -27,6 +27,9 @@ export default function MerchantSettings() {
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [embedTokenTtl, setEmbedTokenTtl] = useState(86400);
+  const [stripePriceStarter, setStripePriceStarter] = useState("");
+  const [stripePricePro, setStripePricePro] = useState("");
+  const [stripePriceElite, setStripePriceElite] = useState("");
 
   useEffect(() => {
     if (!loading && !isAuthenticated) navigate("/");
@@ -44,6 +47,10 @@ export default function MerchantSettings() {
       setMerchantSlug(merchant.slug ?? "");
       setStripePublishableKey(merchant.stripePublishableKey ?? "");
       setStripeMode((merchant.stripeMode as "test" | "live") || "test");
+      const ids = (merchant.stripePlanPriceIds as Record<string, string> | null) ?? {};
+      setStripePriceStarter(ids.starter ?? "");
+      setStripePricePro(ids.pro ?? "");
+      setStripePriceElite(ids.elite ?? "");
     }
   }, [merchant]);
 
@@ -83,6 +90,11 @@ export default function MerchantSettings() {
       stripePublishableKey: stripePublishableKey || undefined,
       stripeAccessToken: stripeSecretKey || undefined,
       stripeWebhookSecret: stripeWebhookSecret || undefined,
+      stripePlanPriceIds: {
+        ...(stripePriceStarter && { starter: stripePriceStarter }),
+        ...(stripePricePro && { pro: stripePricePro }),
+        ...(stripePriceElite && { elite: stripePriceElite }),
+      },
     };
     if (merchant) {
       updateMerchant.mutate({ id: merchant.id, ...payload });
@@ -257,6 +269,24 @@ export default function MerchantSettings() {
                 <p className="font-medium mb-1">Webhook Endpoint</p>
                 <code className="font-mono text-xs bg-blue-100 rounded px-2 py-1 block mt-1">{origin}/api/stripe-webhook</code>
                 <p className="text-xs mt-1 text-blue-600">Events to listen: <code>checkout.session.completed</code>, <code>customer.subscription.updated</code>, <code>invoice.payment_failed</code></p>
+              </div>
+              <div className="space-y-3 pt-2 border-t border-gray-200">
+                <p className="text-sm font-medium text-gray-700">Plan Price IDs (for widget checkout)</p>
+                <p className="text-xs text-gray-500">Create recurring prices in your Stripe Dashboard (Products → Add price) and paste the price IDs. Required for merchant checkout when users choose a plan from your widget.</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Starter (price_...)</Label>
+                    <Input value={stripePriceStarter} onChange={e => setStripePriceStarter(e.target.value)} placeholder="price_xxx" className="font-mono text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Pro (price_...)</Label>
+                    <Input value={stripePlanPricePro} onChange={e => setStripePlanPricePro(e.target.value)} placeholder="price_xxx" className="font-mono text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Elite (price_...)</Label>
+                    <Input value={stripePriceElite} onChange={e => setStripePriceElite(e.target.value)} placeholder="price_xxx" className="font-mono text-xs" />
+                  </div>
+                </div>
               </div>
             </div>
 

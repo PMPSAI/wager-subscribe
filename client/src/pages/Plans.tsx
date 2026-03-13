@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { CheckCircle2, Zap, ArrowRight, Star, Crown, Rocket, TrendingUp, Trophy, Shield } from "lucide-react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import Navbar from "@/components/Navbar";
 
 const TIER_ICONS = {
@@ -29,6 +29,10 @@ const TIER_BORDER = {
 export default function Plans() {
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
+  const search = useSearch();
+  const urlParams = new URLSearchParams(typeof search === "string" ? search : "");
+  const merchantSlug = urlParams.get("slug") || undefined;
+
   const { data: plansData, isLoading } = trpc.subscription.plans.useQuery();
   const plans = plansData?.plans;
   const stripeMode = plansData?.stripeMode;
@@ -36,12 +40,12 @@ export default function Plans() {
 
   const handleSubscribe = async (tier: "starter" | "pro" | "elite") => {
     if (!isAuthenticated) {
-      navigate(`/auth?redirect=${encodeURIComponent("/plans")}`);
+      navigate(`/auth?redirect=${encodeURIComponent("/plans" + (search ? "?" + search : ""))}`);
       return;
     }
     try {
       toast.loading("Redirecting to checkout...", { id: "checkout" });
-      const result = await createCheckout.mutateAsync({ planTier: tier });
+      const result = await createCheckout.mutateAsync({ planTier: tier, merchantSlug });
       toast.dismiss("checkout");
       if (result.url) {
         window.open(result.url, "_blank");

@@ -80,6 +80,8 @@ export const merchants = pgTable("merchants", {
   stripePublishableKey: varchar("stripePublishableKey", { length: 128 }),
   stripeWebhookEndpointId: varchar("stripeWebhookEndpointId", { length: 128 }),
   stripeWebhookSecret: text("stripeWebhookSecret"),
+  /** Merchant's Stripe price IDs per tier (from their Connect Dashboard): { starter, pro, elite } */
+  stripePlanPriceIds: json("stripePlanPriceIds").$type<Record<string, string>>(),
   stripeMode: varchar("stripeMode", { length: 8 }).default("test").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

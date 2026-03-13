@@ -565,6 +565,13 @@ export async function getMerchantById(id: number) {
   return result[0];
 }
 
+export async function getMerchantBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(merchants).where(eq(merchants.slug, slug)).limit(1);
+  return result[0];
+}
+
 export async function updateMerchant(id: number, data: Partial<InsertMerchant>) {
   const db = await getDb();
   if (!db) return;
