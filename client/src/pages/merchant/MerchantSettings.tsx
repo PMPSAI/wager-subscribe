@@ -37,7 +37,7 @@ export default function MerchantSettings() {
 
   const utils = trpc.useUtils();
 
-  const { data: merchant, isLoading: merchantLoading } = trpc.merchant.get.useQuery(undefined, {
+  const { data: merchant, isLoading: merchantLoading, isError: merchantError } = trpc.merchant.get.useQuery(undefined, {
     enabled: !!user,
   });
 
@@ -141,7 +141,11 @@ export default function MerchantSettings() {
               Merchant Account
             </CardTitle>
             <CardDescription>
-              {merchant ? "Your merchant account is active." : "Create your merchant account to start using WagerSubscribe."}
+              {merchant
+                ? "Your merchant account is active."
+                : merchantError
+                  ? "We couldn't load your merchant account (try refreshing). You can create one below."
+                  : "Complete your merchant account setup below. Fill in your business name and slug — this creates your merchant record for widget and Stripe."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

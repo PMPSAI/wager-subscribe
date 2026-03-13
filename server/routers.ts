@@ -788,7 +788,7 @@ export const appRouter = router({
           stripePublishableKey: z.string().optional(),
           stripeWebhookEndpointId: z.string().optional(),
           stripeWebhookSecret: z.string().optional(),
-          stripePlanPriceIds: z.record(z.string()).optional(),
+          stripePlanPriceIds: z.record(z.string(), z.string()).optional(),
           isActive: z.boolean().optional(),
         })
       )
@@ -837,7 +837,7 @@ export const appRouter = router({
           stripePublishableKey: z.string().optional(),
           stripeWebhookEndpointId: z.string().optional(),
           stripeWebhookSecret: z.string().optional(),
-          stripePlanPriceIds: z.record(z.string()).optional(),
+          stripePlanPriceIds: z.record(z.string(), z.string()).optional(),
           isActive: z.boolean().optional(),
         })
       )

@@ -49,7 +49,7 @@ export function registerAuthRoutes(app: Express) {
       const passwordHash = await bcrypt.hash(password, 12);
       const name = [firstName, lastName].filter(Boolean).join(" ") || email.split("@")[0];
 
-      // Create user
+      // Create user (pass role so merchants get admin role)
       await db.upsertUser({
         openId,
         name,
@@ -61,6 +61,7 @@ export function registerAuthRoutes(app: Express) {
         address,
         loginMethod: "email",
         lastSignedIn: new Date(),
+        role: role ?? "user",
       });
 
       // Get the created user to get the ID
@@ -94,7 +95,9 @@ export function registerAuthRoutes(app: Express) {
 
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-      res.json({ success: true, user: { email: user.email, name: user.name, role: user.role } });
+      // Re-read user so role reflects what we just saved
+      const freshUser = await db.getUserByOpenId(openId) ?? user;
+      res.json({ success: true, user: { email: freshUser.email, name: freshUser.name, role: freshUser.role } });
     } catch (err) {
       console.error("[Auth/signup] Error:", err);
       res.status(500).json({ error: "Signup failed. Please try again." });
