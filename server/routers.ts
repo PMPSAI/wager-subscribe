@@ -106,7 +106,21 @@ export const appRouter = router({
 
   // ─── Subscription / Checkout ────────────────────────────────────────────────
   subscription: router({
-    plans: publicProcedure.query(() => ({ plans: PLANS, stripeMode: getStripeMode() })),
+    plans: publicProcedure
+      .input(z.object({ merchantSlug: z.string().optional() }).default({}))
+      .query(async ({ input }) => {
+        const base = { plans: PLANS, stripeMode: getStripeMode() };
+        if (!input?.merchantSlug) return base;
+        const merchant = await getMerchantBySlug(input.merchantSlug);
+        const display = merchant?.stripePlanDisplay as Record<string, number> | null | undefined;
+        if (!display || Object.keys(display).length === 0) return base;
+        const mergedPlans = PLANS.map((p) => {
+          const overrideCents = display[p.tier];
+          if (overrideCents == null) return p;
+          return { ...p, amountCents: overrideCents };
+        });
+        return { plans: mergedPlans, stripeMode: base.stripeMode };
+      }),
 
     createCheckoutSession: protectedProcedure
       .input(
@@ -789,6 +803,7 @@ export const appRouter = router({
           stripeWebhookEndpointId: z.string().optional(),
           stripeWebhookSecret: z.string().optional(),
           stripePlanPriceIds: z.record(z.string(), z.string()).optional(),
+          stripePlanDisplay: z.record(z.string(), z.number()).optional(),
           isActive: z.boolean().optional(),
         })
       )
@@ -838,6 +853,7 @@ export const appRouter = router({
           stripeWebhookEndpointId: z.string().optional(),
           stripeWebhookSecret: z.string().optional(),
           stripePlanPriceIds: z.record(z.string(), z.string()).optional(),
+          stripePlanDisplay: z.record(z.string(), z.number()).optional(),
           isActive: z.boolean().optional(),
         })
       )

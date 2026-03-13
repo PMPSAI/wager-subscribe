@@ -82,6 +82,8 @@ export const merchants = pgTable("merchants", {
   stripeWebhookSecret: text("stripeWebhookSecret"),
   /** Merchant's Stripe price IDs per tier (from their Connect Dashboard): { starter, pro, elite } */
   stripePlanPriceIds: json("stripePlanPriceIds").$type<Record<string, string>>(),
+  /** Display prices in cents per tier for widget/plans UI: { starter?: number, pro?: number, elite?: number } */
+  stripePlanDisplay: json("stripePlanDisplay").$type<Record<string, number>>(),
   stripeMode: varchar("stripeMode", { length: 8 }).default("test").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

@@ -33,7 +33,7 @@ export default function Plans() {
   const urlParams = new URLSearchParams(typeof search === "string" ? search : "");
   const merchantSlug = urlParams.get("slug") || undefined;
 
-  const { data: plansData, isLoading } = trpc.subscription.plans.useQuery();
+  const { data: plansData, isLoading } = trpc.subscription.plans.useQuery({ merchantSlug });
   const plans = plansData?.plans;
   const stripeMode = plansData?.stripeMode;
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation();

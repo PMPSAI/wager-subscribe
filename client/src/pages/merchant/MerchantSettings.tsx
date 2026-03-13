@@ -30,6 +30,9 @@ export default function MerchantSettings() {
   const [stripePriceStarter, setStripePriceStarter] = useState("");
   const [stripePricePro, setStripePricePro] = useState("");
   const [stripePriceElite, setStripePriceElite] = useState("");
+  const [displayPriceStarter, setDisplayPriceStarter] = useState("");
+  const [displayPricePro, setDisplayPricePro] = useState("");
+  const [displayPriceElite, setDisplayPriceElite] = useState("");
 
   useEffect(() => {
     if (!loading && !isAuthenticated) navigate("/");
@@ -51,6 +54,10 @@ export default function MerchantSettings() {
       setStripePriceStarter(ids.starter ?? "");
       setStripePricePro(ids.pro ?? "");
       setStripePriceElite(ids.elite ?? "");
+      const disp = (merchant.stripePlanDisplay as Record<string, number> | null) ?? {};
+      setDisplayPriceStarter(disp.starter != null ? String(disp.starter / 100) : "");
+      setDisplayPricePro(disp.pro != null ? String(disp.pro / 100) : "");
+      setDisplayPriceElite(disp.elite != null ? String(disp.elite / 100) : "");
     }
   }, [merchant]);
 
@@ -94,6 +101,11 @@ export default function MerchantSettings() {
         ...(stripePriceStarter && { starter: stripePriceStarter }),
         ...(stripePricePro && { pro: stripePricePro }),
         ...(stripePriceElite && { elite: stripePriceElite }),
+      },
+      stripePlanDisplay: {
+        ...(displayPriceStarter && { starter: Math.round(parseFloat(displayPriceStarter) * 100) }),
+        ...(displayPricePro && { pro: Math.round(parseFloat(displayPricePro) * 100) }),
+        ...(displayPriceElite && { elite: Math.round(parseFloat(displayPriceElite) * 100) }),
       },
     };
     if (merchant) {
@@ -293,7 +305,7 @@ export default function MerchantSettings() {
               Plan Price IDs (Widget Checkout)
             </CardTitle>
             <CardDescription>
-              Create recurring subscription prices in your Stripe Dashboard (Products → Add price) and paste the price IDs below. Required for checkout when users choose a plan from your embedded widget.
+              Create recurring subscription prices in your Stripe Dashboard (Products → Add price) and paste the price IDs below. Set display prices so your widget shows your custom amounts (e.g. $9, $29, $79).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -301,14 +313,20 @@ export default function MerchantSettings() {
               <div>
                 <Label className="text-sm font-medium mb-1.5 block">Starter (price_...)</Label>
                 <Input value={stripePriceStarter} onChange={e => setStripePriceStarter(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
+                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($)</Label>
+                <Input type="number" min="0" step="0.01" value={displayPriceStarter} onChange={e => setDisplayPriceStarter(e.target.value)} placeholder="9" className="text-sm mt-0.5" />
               </div>
               <div>
                 <Label className="text-sm font-medium mb-1.5 block">Pro (price_...)</Label>
                 <Input value={stripePricePro} onChange={e => setStripePricePro(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
+                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($)</Label>
+                <Input type="number" min="0" step="0.01" value={displayPricePro} onChange={e => setDisplayPricePro(e.target.value)} placeholder="29" className="text-sm mt-0.5" />
               </div>
               <div>
                 <Label className="text-sm font-medium mb-1.5 block">Elite (price_...)</Label>
                 <Input value={stripePriceElite} onChange={e => setStripePriceElite(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
+                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($)</Label>
+                <Input type="number" min="0" step="0.01" value={displayPriceElite} onChange={e => setDisplayPriceElite(e.target.value)} placeholder="79" className="text-sm mt-0.5" />
               </div>
             </div>
             <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={handleSave} disabled={createMerchant.isPending || updateMerchant.isPending}>

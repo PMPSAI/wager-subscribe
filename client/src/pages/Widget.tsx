@@ -67,7 +67,9 @@ export default function Widget({ merchantSlug }: WidgetProps) {
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
   const [userChoice, setUserChoice] = useState<"yes" | "no" | null>(null);
 
-  const { data: plansData, isLoading: plansLoading } = trpc.subscription.plans.useQuery();
+  const { data: plansData, isLoading: plansLoading } = trpc.subscription.plans.useQuery({
+    merchantSlug: effectiveSlug === "wager-demo" ? undefined : effectiveSlug,
+  });
   const plans = plansData?.plans;
   const { data: enabledMarkets } = trpc.markets.listEnabled.useQuery();
   const memberSignup = trpc.member.signup.useMutation();
