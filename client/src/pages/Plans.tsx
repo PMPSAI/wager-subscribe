@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,16 +28,42 @@ const TIER_BORDER = {
 };
 
 export default function Plans() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   const search = useSearch();
   const urlParams = new URLSearchParams(typeof search === "string" ? search : "");
   const merchantSlug = urlParams.get("slug") || undefined;
+  const tierFromUrl = urlParams.get("tier") as "starter" | "pro" | "elite" | null;
 
   const { data: plansData, isLoading } = trpc.subscription.plans.useQuery({ merchantSlug });
   const plans = plansData?.plans;
   const stripeMode = plansData?.stripeMode;
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation();
+
+  // When arriving from widget with ?tier=: if authenticated, go to Stripe; if not, redirect to auth
+  useEffect(() => {
+    if (authLoading || !tierFromUrl || !["starter", "pro", "elite"].includes(tierFromUrl)) return;
+    if (createCheckout.isPending || createCheckout.isSuccess) return;
+
+    if (isAuthenticated) {
+      toast.loading("Redirecting to checkout...", { id: "checkout" });
+      createCheckout.mutate(
+        { planTier: tierFromUrl, merchantSlug },
+        {
+          onSuccess: (result) => {
+            toast.dismiss("checkout");
+            if (result?.url) window.location.href = result.url;
+          },
+          onError: (err) => {
+            toast.dismiss("checkout");
+            toast.error(err.message || "Checkout failed");
+          },
+        }
+      );
+    } else {
+      navigate(`/auth?redirect=${encodeURIComponent("/plans" + (search ? "?" + search : ""))}`);
+    }
+  }, [tierFromUrl, isAuthenticated, authLoading]);
 
   const handleSubscribe = async (tier: "starter" | "pro" | "elite") => {
     if (!isAuthenticated) {

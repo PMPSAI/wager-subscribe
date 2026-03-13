@@ -114,19 +114,16 @@ export default function Widget({ merchantSlug }: WidgetProps) {
     }
   };
 
-  const handleCheckout = async (tier: "starter" | "pro" | "elite") => {
-    try {
-      // Use explicit app URL when set (for embed: ensures redirect goes to wager-subscribe, not host page)
+  const handleCheckout = (tier: "starter" | "pro" | "elite") => {
+    const params = `tier=${tier}&slug=${effectiveSlug}&anon=${anonToken}`;
+    const plansPath = `/plans?${params}`;
+    // In iframe: use full URL so we stay in the app (or break out if cross-origin)
+    if (window.top !== window.self) {
       const baseUrl = (import.meta.env.VITE_APP_URL as string) || window.location.origin;
-      const url = `${baseUrl}/plans?tier=${tier}&slug=${effectiveSlug}&anon=${anonToken}`;
-      // Open in new tab when embedded (avoids cross-origin iframe navigation errors)
-      if (window.top !== window.self) {
-        window.location.href = url;
-      } else {
-        window.location.href = url;
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Checkout failed");
+      window.location.href = `${baseUrl}${plansPath}`;
+    } else {
+      // Same tab: use client-side navigation to avoid full reload / wrong redirect
+      navigate(plansPath);
     }
   };
 
