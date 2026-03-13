@@ -7,7 +7,7 @@
  * - Anonymous tracking via localStorage tokens
  * - Member signup (email-based, no password required)
  * 
- * Flow: Select Plan → Member Auth → Prediction → Track & Earn
+ * Flow: Choose Plan → Pay (Stripe) → Predict → Track
  */
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
 import {
   Zap, Trophy, TrendingUp, Shield, ArrowRight, CheckCircle2,
-  CreditCard, Target, Clock, Star, Crown, Rocket, Lock, User, Mail
+  CreditCard, Target, Clock, Star, Crown, Rocket, Lock, User, Mail, Loader2
 } from "lucide-react";
 
 const TIER_CONFIG = {
@@ -24,7 +24,7 @@ const TIER_CONFIG = {
   elite: { icon: Crown, color: "amber", label: "Elite", price: "$79/mo" },
 };
 
-type Step = "plan" | "member-auth" | "prediction" | "tracking";
+type Step = "plan" | "pay" | "prediction" | "tracking";
 
 const ANON_TOKEN_KEY = "ws_anon_token";
 const MEMBER_TOKEN_KEY = "ws_member_token";
@@ -106,12 +106,8 @@ export default function Widget({ merchantSlug }: WidgetProps) {
 
   const handleSelectPlan = (tier: "starter" | "pro" | "elite") => {
     setSelectedTier(tier);
-    if (!memberToken) {
-      setStep("member-auth");
-    } else {
-      // Already a member, go to checkout
-      handleCheckout(tier);
-    }
+    setStep("pay");
+    handleCheckout(tier);
   };
 
   const handleCheckout = (tier: "starter" | "pro" | "elite") => {
@@ -125,42 +121,6 @@ export default function Widget({ merchantSlug }: WidgetProps) {
       // Same tab: use client-side navigation to avoid full reload / wrong redirect
       navigate(plansPath);
     }
-  };
-
-  const handleMemberSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!memberEmail) {
-      toast.error("Email is required");
-      return;
-    }
-    setSigningUp(true);
-    try {
-      const result = await memberSignup.mutateAsync({
-        merchantSlug: effectiveSlug,
-        email: memberEmail,
-        firstName: memberFirstName || undefined,
-        lastName: memberLastName || undefined,
-        anonToken,
-      });
-      if (result.sessionToken) {
-        localStorage.setItem(MEMBER_TOKEN_KEY, result.sessionToken);
-        localStorage.setItem(MEMBER_ID_KEY, String(result.memberId));
-        setMemberToken(result.sessionToken);
-        setMemberId(result.memberId ?? null);
-        toast.success(result.isNew ? "Welcome! Account created." : "Welcome back!");
-        // Now proceed to checkout
-        if (selectedTier) handleCheckout(selectedTier);
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Signup failed");
-    } finally {
-      setSigningUp(false);
-    }
-  };
-
-  const handleSkipAuth = () => {
-    // Allow anonymous users to proceed
-    if (selectedTier) handleCheckout(selectedTier);
   };
 
   return (
@@ -192,19 +152,18 @@ export default function Widget({ merchantSlug }: WidgetProps) {
       {/* Progress Steps */}
       <div className="max-w-4xl mx-auto px-4 py-6">
         <div className="flex items-center justify-center gap-2 mb-8">
-          {(["plan", "member-auth", "prediction", "tracking"] as Step[]).map((s, i) => {
+          {(["plan", "pay", "prediction", "tracking"] as Step[]).map((s, i) => {
             const stepLabels: Record<Step, string> = {
               "plan": "Choose Plan",
-              "member-auth": "Quick Sign Up",
-              "prediction": "Pick Prediction",
-              "tracking": "Track & Earn"
+              "pay": "Pay",
+              "prediction": "Predict",
+              "tracking": "Track"
             };
-            const stepOrder: Step[] = ["plan", "member-auth", "prediction", "tracking"];
+            const stepOrder: Step[] = ["plan", "pay", "prediction", "tracking"];
             const stepIndex = stepOrder.indexOf(step);
             const thisIndex = stepOrder.indexOf(s);
             const isDone = thisIndex < stepIndex;
             const isCurrent = s === step;
-            if (s === "member-auth" && memberToken) return null;
             return (
               <div key={s} className="flex items-center gap-2">
                 {i > 0 && <div className={`w-8 h-0.5 ${isDone ? "bg-emerald-500" : "bg-gray-200"}`} />}
@@ -291,7 +250,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
                         onClick={(e) => { e.stopPropagation(); handleSelectPlan(plan.tier); }}
                       >
                         <CreditCard size={14} />
-                        Subscribe & Predict
+                        Subscribe & Pay
                         <ArrowRight size={14} />
                       </button>
                     </div>
@@ -307,72 +266,13 @@ export default function Widget({ merchantSlug }: WidgetProps) {
           </div>
         )}
 
-        {/* Step: Member Auth */}
-        {step === "member-auth" && (
-          <div className="max-w-md mx-auto">
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-              <div className="text-center mb-6">
-                <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Mail size={24} className="text-emerald-600" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-900">Quick Sign Up</h2>
-                <p className="text-gray-500 text-sm mt-1">
-                  Enter your email to track your prediction and receive updates.
-                </p>
-              </div>
-
-              <form onSubmit={handleMemberSignup} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">First Name</label>
-                    <input
-                      type="text"
-                      value={memberFirstName}
-                      onChange={e => setMemberFirstName(e.target.value)}
-                      placeholder="John"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Last Name</label>
-                    <input
-                      type="text"
-                      value={memberLastName}
-                      onChange={e => setMemberLastName(e.target.value)}
-                      placeholder="Doe"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Email Address *</label>
-                  <input
-                    type="email"
-                    value={memberEmail}
-                    onChange={e => setMemberEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={signingUp}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors"
-                >
-                  {signingUp ? "Setting up..." : "Continue to Checkout →"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSkipAuth}
-                  className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  Skip for now (anonymous)
-                </button>
-              </form>
+        {/* Step: Pay (redirecting to Stripe) */}
+        {step === "pay" && (
+          <div className="max-w-md mx-auto text-center py-16">
+            <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
+              <Loader2 className="w-12 h-12 text-emerald-600 animate-spin mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Redirecting to Checkout</h2>
+              <p className="text-gray-500">Taking you to Stripe to complete payment...</p>
             </div>
           </div>
         )}
@@ -451,7 +351,53 @@ export default function Widget({ merchantSlug }: WidgetProps) {
             )}
 
             {selectedCondition && (
-              <div className="mt-6 text-center">
+              <div className="mt-6 space-y-4">
+                {!memberToken && (
+                  <div className="max-w-md mx-auto bg-gray-50 rounded-xl p-4 border border-gray-200">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Optional: Enter email to save your prediction</p>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!memberEmail) return;
+                        setSigningUp(true);
+                        try {
+                          const result = await memberSignup.mutateAsync({
+                            merchantSlug: effectiveSlug,
+                            email: memberEmail,
+                            firstName: memberFirstName || undefined,
+                            lastName: memberLastName || undefined,
+                            anonToken,
+                          });
+                          if (result.sessionToken) {
+                            localStorage.setItem(MEMBER_TOKEN_KEY, result.sessionToken);
+                            localStorage.setItem(MEMBER_ID_KEY, String(result.memberId));
+                            setMemberToken(result.sessionToken);
+                            setMemberId(result.memberId ?? null);
+                            toast.success("Account created! Your prediction will be saved.");
+                          }
+                        } catch (err: any) {
+                          toast.error(err.message || "Signup failed");
+                        } finally {
+                          setSigningUp(false);
+                        }
+                      }}
+                      className="flex gap-2"
+                    >
+                      <input
+                        type="email"
+                        value={memberEmail}
+                        onChange={(e) => setMemberEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"
+                      />
+                      <button type="submit" disabled={signingUp || !memberEmail} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg">
+                        {signingUp ? "..." : "Save"}
+                      </button>
+                    </form>
+                    <p className="text-xs text-gray-500 mt-2">Or skip to proceed without saving</p>
+                  </div>
+                )}
+                <div className="text-center">
                 <button
                   onClick={async () => {
                     const marketId = parseInt(selectedCondition, 10);
@@ -467,8 +413,6 @@ export default function Widget({ merchantSlug }: WidgetProps) {
                         toast.error(e.message || "Failed to save prediction");
                         return;
                       }
-                    } else if (!memberToken) {
-                      toast("Sign up to save your prediction to your account", { type: "info" });
                     }
                     setStep("tracking");
                   }}
@@ -495,7 +439,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">You're All Set!</h2>
               <p className="text-gray-500 mb-6">
                 Your prediction is being tracked. We'll notify you when it resolves.
-                {memberEmail && ` Updates will be sent to ${memberEmail}.`}
+                {(memberVerify.data?.member?.email || memberEmail) && ` Updates will be sent to ${memberVerify.data?.member?.email || memberEmail}.`}
               </p>
               <div className="bg-emerald-50 rounded-xl p-4 mb-6 text-left">
                 <div className="flex items-center gap-2 mb-2">
