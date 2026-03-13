@@ -87,10 +87,23 @@ export default function MerchantSettings() {
     toast.success(`${label} copied`);
   };
 
+  const isValidStripePriceId = (v: string) => !v || /^price_[a-zA-Z0-9]+$/.test(v.trim());
+
   const handleSave = () => {
     if (!merchantName.trim() || !merchantSlug.trim()) {
       toast.error("Name and slug are required");
       return;
+    }
+    const priceFields = [
+      { val: stripePriceStarter, tier: "Starter" },
+      { val: stripePricePro, tier: "Pro" },
+      { val: stripePriceElite, tier: "Elite" },
+    ];
+    for (const { val, tier } of priceFields) {
+      if (val.trim() && !isValidStripePriceId(val)) {
+        toast.error(`${tier}: Enter a Stripe Price ID (starts with price_), not a dollar amount. See Stripe Dashboard → Products → Add price.`);
+        return;
+      }
     }
     const payload = {
       name: merchantName,
@@ -308,27 +321,30 @@ export default function MerchantSettings() {
               Plan Price IDs (Widget Checkout)
             </CardTitle>
             <CardDescription>
-              Create recurring subscription prices in your Stripe Dashboard (Products → Add price) and paste the price IDs below. Set display prices so your widget shows your custom amounts (e.g. $9, $29, $79).
+              <span className="block mb-1">Each plan needs a <strong>Stripe Price object ID</strong> (e.g. <code className="text-xs bg-gray-100 px-1 rounded">price_1ABC...</code>), <em>not</em> the dollar amount. Create recurring prices in Stripe Dashboard → Products → Add price, then copy the Price ID.</span>
+              <a href="https://docs.stripe.com/products-prices/manage-prices" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1 mt-1">
+                Stripe: Manage Prices <ExternalLink size={12} />
+              </a>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <Label className="text-sm font-medium mb-1.5 block">Starter (price_...)</Label>
-                <Input value={stripePriceStarter} onChange={e => setStripePriceStarter(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
-                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($)</Label>
+                <Label className="text-sm font-medium mb-1.5 block">Starter — Price ID</Label>
+                <Input value={stripePriceStarter} onChange={e => setStripePriceStarter(e.target.value)} placeholder="price_1ABC..." className="font-mono text-sm" />
+                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($) — shown in widget only</Label>
                 <Input type="number" min="0" step="0.01" value={displayPriceStarter} onChange={e => setDisplayPriceStarter(e.target.value)} placeholder="9" className="text-sm mt-0.5" />
               </div>
               <div>
-                <Label className="text-sm font-medium mb-1.5 block">Pro (price_...)</Label>
-                <Input value={stripePricePro} onChange={e => setStripePricePro(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
-                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($)</Label>
+                <Label className="text-sm font-medium mb-1.5 block">Pro — Price ID</Label>
+                <Input value={stripePricePro} onChange={e => setStripePricePro(e.target.value)} placeholder="price_1ABC..." className="font-mono text-sm" />
+                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($) — shown in widget only</Label>
                 <Input type="number" min="0" step="0.01" value={displayPricePro} onChange={e => setDisplayPricePro(e.target.value)} placeholder="29" className="text-sm mt-0.5" />
               </div>
               <div>
-                <Label className="text-sm font-medium mb-1.5 block">Elite (price_...)</Label>
-                <Input value={stripePriceElite} onChange={e => setStripePriceElite(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
-                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($)</Label>
+                <Label className="text-sm font-medium mb-1.5 block">Elite — Price ID</Label>
+                <Input value={stripePriceElite} onChange={e => setStripePriceElite(e.target.value)} placeholder="price_1ABC..." className="font-mono text-sm" />
+                <Label className="text-xs text-gray-500 mt-1.5 block">Display price ($) — shown in widget only</Label>
                 <Input type="number" min="0" step="0.01" value={displayPriceElite} onChange={e => setDisplayPriceElite(e.target.value)} placeholder="79" className="text-sm mt-0.5" />
               </div>
             </div>

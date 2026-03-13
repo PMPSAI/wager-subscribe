@@ -182,6 +182,13 @@ export const appRouter = router({
           priceId = plan.priceId;
         }
 
+        if (!priceId || typeof priceId !== "string" || !priceId.startsWith("price_")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid Stripe Price ID. The price must be a Stripe Price object ID (e.g. price_xxx), not a numeric amount. Create prices in Stripe Dashboard → Products → Add price. See https://docs.stripe.com/products-prices/manage-prices",
+          });
+        }
+
         const session = await stripe.checkout.sessions.create({
           mode: "subscription",
           line_items: [{ price: priceId, quantity: 1 }],
