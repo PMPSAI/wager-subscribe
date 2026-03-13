@@ -223,7 +223,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
                         </div>
                         <div>
                           <p className="font-bold text-gray-900">{plan.name}</p>
-                          <p className="text-2xl font-bold text-gray-900">${(plan.amountCents / 100).toFixed(0)}<span className="text-sm font-normal text-gray-400">/mo</span></p>
+                          <p className="text-2xl font-bold text-gray-900">${String(Math.round(plan.amountCents * 0.01))}<span className="text-sm font-normal text-gray-400">{" per month"}</span></p>
                         </div>
                       </div>
                       <div className="bg-emerald-50 rounded-xl p-3 mb-4">
@@ -425,6 +425,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
                   <p className="text-sm text-amber-600 mt-2">Select Yes or No above to confirm</p>
                 )}
               </div>
+            </div>
             )}
           </div>
         )}
@@ -439,7 +440,9 @@ export default function Widget({ merchantSlug }: WidgetProps) {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">You're All Set!</h2>
               <p className="text-gray-500 mb-6">
                 Your prediction is being tracked. We'll notify you when it resolves.
-                {(memberVerify.data?.member?.email || memberEmail) && ` Updates will be sent to ${memberVerify.data?.member?.email || memberEmail}.`}
+                {(memberVerify.data?.member?.email || memberEmail)
+                  ? ` Updates will be sent to ${memberVerify.data?.member?.email || memberEmail}.`
+                  : ""}
               </p>
               <div className="bg-emerald-50 rounded-xl p-4 mb-6 text-left">
                 <div className="flex items-center gap-2 mb-2">
