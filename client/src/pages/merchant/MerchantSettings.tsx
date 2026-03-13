@@ -270,29 +270,46 @@ export default function MerchantSettings() {
                 <code className="font-mono text-xs bg-blue-100 rounded px-2 py-1 block mt-1">{origin}/api/stripe-webhook</code>
                 <p className="text-xs mt-1 text-blue-600">Events to listen: <code>checkout.session.completed</code>, <code>customer.subscription.updated</code>, <code>invoice.payment_failed</code></p>
               </div>
-              <div className="space-y-3 pt-2 border-t border-gray-200">
-                <p className="text-sm font-medium text-gray-700">Plan Price IDs (for widget checkout)</p>
-                <p className="text-xs text-gray-500">Create recurring prices in your Stripe Dashboard (Products → Add price) and paste the price IDs. Required for merchant checkout when users choose a plan from your widget.</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <Label className="text-xs font-medium mb-1 block">Starter (price_...)</Label>
-                    <Input value={stripePriceStarter} onChange={e => setStripePriceStarter(e.target.value)} placeholder="price_xxx" className="font-mono text-xs" />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-medium mb-1 block">Pro (price_...)</Label>
-                    <Input value={stripePlanPricePro} onChange={e => setStripePlanPricePro(e.target.value)} placeholder="price_xxx" className="font-mono text-xs" />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-medium mb-1 block">Elite (price_...)</Label>
-                    <Input value={stripePriceElite} onChange={e => setStripePriceElite(e.target.value)} placeholder="price_xxx" className="font-mono text-xs" />
-                  </div>
-                </div>
-              </div>
             </div>
 
             <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={handleSave} disabled={createMerchant.isPending || updateMerchant.isPending}>
               <Save size={14} />
               {createMerchant.isPending || updateMerchant.isPending ? "Saving..." : merchant ? "Save Settings" : "Create Merchant Account"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Plan Price IDs - Widget Checkout */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <span className="text-lg">💳</span>
+              </div>
+              Plan Price IDs (Widget Checkout)
+            </CardTitle>
+            <CardDescription>
+              Create recurring subscription prices in your Stripe Dashboard (Products → Add price) and paste the price IDs below. Required for checkout when users choose a plan from your embedded widget.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label className="text-sm font-medium mb-1.5 block">Starter (price_...)</Label>
+                <Input value={stripePriceStarter} onChange={e => setStripePriceStarter(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium mb-1.5 block">Pro (price_...)</Label>
+                <Input value={stripePricePro} onChange={e => setStripePricePro(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium mb-1.5 block">Elite (price_...)</Label>
+                <Input value={stripePriceElite} onChange={e => setStripePriceElite(e.target.value)} placeholder="price_xxx" className="font-mono text-sm" />
+              </div>
+            </div>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2" onClick={handleSave} disabled={createMerchant.isPending || updateMerchant.isPending}>
+              <Save size={14} />
+              {createMerchant.isPending || updateMerchant.isPending ? "Saving..." : "Save Plan Prices"}
             </Button>
           </CardContent>
         </Card>

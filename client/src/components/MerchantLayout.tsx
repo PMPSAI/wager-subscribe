@@ -16,7 +16,7 @@ const navItems = [
   { label: "Settlements", icon: Wallet, href: "/merchant/settlements" },
   { label: "Resolver", icon: Zap, href: "/merchant/resolver" },
   { label: "Webhook Test", icon: Webhook, href: "/merchant/webhook" },
-  { label: "Settings", icon: Settings, href: "/merchant/settings" },
+  { label: "Settings (Stripe & Plan Prices)", icon: Settings, href: "/merchant/settings" },
 ];
 
 export default function MerchantLayout({ children }: { children: React.ReactNode }) {
