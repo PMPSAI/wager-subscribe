@@ -114,13 +114,14 @@ export default function Widget({ merchantSlug }: WidgetProps) {
     const params = `tier=${tier}&slug=${effectiveSlug}&anon=${anonToken}`;
     const plansPath = `/plans?${params}`;
     // In iframe: use full URL so we stay in the app (or break out if cross-origin)
-    if (window.top !== window.self) {
-      const baseUrl = (import.meta.env.VITE_APP_URL as string) || window.location.origin;
-      window.location.href = `${baseUrl}${plansPath}`;
-    } else {
-      // Same tab: use client-side navigation to avoid full reload / wrong redirect
-      navigate(plansPath);
-    }
+    // if (window.top !== window.self) {
+    //   const baseUrl = (import.meta.env.VITE_APP_URL as string) || window.location.origin;
+    //   window.location.href = `${baseUrl}${plansPath}`;
+    // } else {
+    //   // Same tab: use client-side navigation to avoid full reload / wrong redirect
+    //   navigate(plansPath);
+    // }
+    navigate(plansPath);
   };
 
   return (
