@@ -16,7 +16,10 @@
     "test": "vitest run",
     "db:push": "pnpm exec drizzle-kit generate && pnpm exec drizzle-kit migrate",
     "db:migrate-prediction-markets": "node scripts/migrate-prediction-markets.mjs",
-    "db:migrate-intents-merchant": "node scripts/migrate-intents-merchant.mjs"
+    "db:migrate-intents-merchant": "node scripts/migrate-intents-merchant.mjs",
+    "db:migrate-all-pending": "node scripts/migrate-all-pending.mjs",
+    "db:migrate-all-pending": "node scripts/migrate-all-pending.mjs",
+    "db:migrate-all-pending": "node scripts/migrate-all-pending.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

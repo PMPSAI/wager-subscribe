@@ -331,8 +331,13 @@ export async function getOrCreateIncentiveOptionForMarket(predictionMarketId: nu
 export async function createIntent(data: InsertIntent) {
   const db = await getDb();
   if (!db) return undefined;
-  const [result] = await db.insert(intents).values(data).returning({ id: intents.id });
-  return result?.id;
+  try {
+    const [result] = await db.insert(intents).values(data).returning({ id: intents.id });
+    return result?.id;
+  } catch (err: any) {
+    const cause = err?.cause?.message ?? err?.message ?? String(err);
+    throw new Error(`Intent insert failed: ${cause}`);
+  }
 }
 
 export async function getUserIntents(userId: number) {
