@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { TRPCError } from "@trpc/server";
-import { getStripe, getStripeMode } from "./stripe";
+import { getStripe, getStripeMode, getStripePublishableKey } from "./stripe";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -109,9 +109,11 @@ export const appRouter = router({
     plans: publicProcedure
       .input(z.object({ merchantSlug: z.string().optional() }).default({}))
       .query(async ({ input }) => {
-        const base = { plans: PLANS, stripeMode: getStripeMode() };
+        const platformPk = getStripePublishableKey();
+        const merchant = input?.merchantSlug ? await getMerchantBySlug(input.merchantSlug) : null;
+        const stripePublishableKey = (merchant?.stripePublishableKey as string | null) ?? platformPk;
+        const base = { plans: PLANS, stripeMode: getStripeMode(), stripePublishableKey };
         if (!input?.merchantSlug) return base;
-        const merchant = await getMerchantBySlug(input.merchantSlug);
         const display = merchant?.stripePlanDisplay as Record<string, number> | null | undefined;
         if (!display || Object.keys(display).length === 0) return base;
         const mergedPlans = PLANS.map((p) => {
@@ -119,7 +121,7 @@ export const appRouter = router({
           if (overrideCents == null) return p;
           return { ...p, amountCents: overrideCents };
         });
-        return { plans: mergedPlans, stripeMode: base.stripeMode };
+        return { plans: mergedPlans, stripeMode: base.stripeMode, stripePublishableKey };
       }),
 
     createCheckoutSession: protectedProcedure
@@ -216,6 +218,84 @@ export const appRouter = router({
           incentiveSelected: 0,
         });
         return { url: session.url };
+      }),
+
+    /** Creates a Checkout Session for embedded mode (renders payment form in the widget). */
+    createEmbeddedCheckoutSession: protectedProcedure
+      .input(
+        z.object({
+          planTier: z.enum(["starter", "pro", "elite"]),
+          merchantSlug: z.string().optional(),
+          returnUrlPath: z.string().optional(), // e.g. /widget?slug=xxx — {CHECKOUT_SESSION_ID} will be appended
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const plan = PLANS.find((p) => p.tier === input.planTier);
+        if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid plan" });
+        const origin = (ctx.req.headers.origin as string) || "http://localhost:3000";
+        const returnPath = input.returnUrlPath ?? "/widget";
+        const returnUrl = `${origin}${returnPath.includes("?") ? returnPath + "&" : returnPath + "?"}session_id={CHECKOUT_SESSION_ID}`;
+
+        let stripe: Stripe;
+        let priceId: string;
+        let planName = plan.name;
+        let amountCents = plan.amountCents;
+        const currency = plan.currency;
+
+        if (input.merchantSlug) {
+          const merchant = await getMerchantBySlug(input.merchantSlug);
+          const priceIds = merchant?.stripePlanPriceIds as Record<string, string> | null | undefined;
+          const merchantPriceId = priceIds?.[input.planTier];
+          if (merchant && merchant.stripeAccessToken && merchantPriceId) {
+            stripe = new Stripe(merchant.stripeAccessToken, { apiVersion: "2026-02-25.clover" });
+            priceId = merchantPriceId;
+            planName = `${merchant.name} - ${plan.name}`;
+          } else if (merchant) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Merchant has not configured Stripe plan prices for this tier.",
+            });
+          } else {
+            stripe = getStripe();
+            priceId = plan.priceId;
+          }
+        } else {
+          stripe = getStripe();
+          priceId = plan.priceId;
+        }
+
+        if (!priceId || typeof priceId !== "string" || !priceId.startsWith("price_")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid Stripe Price ID. Use a Stripe Price object ID (e.g. price_xxx).",
+          });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          mode: "subscription",
+          ui_mode: "embedded",
+          return_url: returnUrl,
+          line_items: [{ price: priceId, quantity: 1 }],
+          customer_email: ctx.user.email ?? undefined,
+          allow_promotion_codes: true,
+          client_reference_id: ctx.user.id.toString(),
+          metadata: {
+            user_id: ctx.user.id.toString(),
+            plan_tier: plan.tier,
+            plan_name: planName,
+          },
+        });
+        await createTransaction({
+          userId: ctx.user.id,
+          stripeSessionId: session.id,
+          planName,
+          planTier: plan.tier,
+          amountCents,
+          currency,
+          status: "pending",
+          incentiveSelected: 0,
+        });
+        return { clientSecret: session.client_secret! };
       }),
 
     verifySession: protectedProcedure

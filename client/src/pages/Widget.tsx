@@ -1,21 +1,24 @@
 /**
  * WagerSubscribe Embeddable Widget
- * 
+ *
  * Supports:
  * - /widget (default demo)
  * - /widget/:merchantSlug (merchant-specific)
  * - Anonymous tracking via localStorage tokens
  * - Member signup (email-based, no password required)
- * 
- * Flow: Choose Plan → Pay (Stripe) → Predict → Track
+ *
+ * Flow: Choose Plan → Pay (Stripe embedded) → Predict → Track
  */
 import { useState, useEffect } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
 import {
   Zap, Trophy, TrendingUp, Shield, ArrowRight, CheckCircle2,
-  CreditCard, Target, Clock, Star, Crown, Rocket, Lock, User, Mail, Loader2
+  CreditCard, Target, Clock, Star, Crown, Rocket, User, Loader2
 } from "lucide-react";
 
 const TIER_CONFIG = {
@@ -39,11 +42,121 @@ function getAnonToken(): string {
   return token;
 }
 
+interface PayStepProps {
+  selectedTier: "starter" | "pro" | "elite" | null;
+  effectiveSlug: string;
+  embedToken?: string;
+  merchantSlug?: string;
+  isAuthenticated: boolean;
+  authLoading: boolean;
+  stripePublishableKey?: string;
+  createEmbeddedCheckout: ReturnType<typeof trpc.subscription.createEmbeddedCheckoutSession.useMutation>;
+  navigate: (path: string) => void;
+}
+
+function PayStep({
+  selectedTier,
+  effectiveSlug,
+  embedToken,
+  isAuthenticated,
+  authLoading,
+  stripePublishableKey,
+  createEmbeddedCheckout,
+  navigate,
+}: PayStepProps) {
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedTier || !isAuthenticated || !stripePublishableKey || clientSecret || createEmbeddedCheckout.isPending) return;
+    const basePath = effectiveSlug !== "wager-demo" ? `/widget/${effectiveSlug}` : "/widget";
+    const returnUrlPath = embedToken ? `${basePath}?token=${embedToken}` : basePath;
+    createEmbeddedCheckout.mutate(
+      {
+        planTier: selectedTier,
+        merchantSlug: effectiveSlug === "wager-demo" ? undefined : effectiveSlug,
+        returnUrlPath,
+      },
+      {
+        onSuccess: (data: { clientSecret?: string }) => {
+          if (data?.clientSecret) setClientSecret(data.clientSecret);
+        },
+        onError: (err: { message?: string }) => toast.error(err.message || "Failed to start checkout"),
+      }
+    );
+  }, [selectedTier, isAuthenticated, stripePublishableKey, effectiveSlug, embedToken]);
+
+  if (authLoading) {
+    return (
+      <div className="max-w-md mx-auto text-center py-16">
+        <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
+          <Loader2 className="w-12 h-12 text-emerald-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    const redirectPath = effectiveSlug !== "wager-demo" ? `/widget/${effectiveSlug}` : "/widget";
+    const authRedirect = `/auth?redirect=${encodeURIComponent(redirectPath)}`;
+    return (
+      <div className="max-w-md mx-auto text-center py-16">
+        <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Sign in to pay</h2>
+          <p className="text-gray-500 mb-6">You need to sign in to complete your subscription.</p>
+          <button
+            onClick={() => navigate(authRedirect)}
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl"
+          >
+            Sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stripePublishableKey) {
+    return (
+      <div className="max-w-md mx-auto text-center py-16">
+        <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Checkout unavailable</h2>
+          <p className="text-gray-500">Stripe is not configured for this merchant.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (createEmbeddedCheckout.isPending || !clientSecret) {
+    return (
+      <div className="max-w-md mx-auto text-center py-16">
+        <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
+          <Loader2 className="w-12 h-12 text-emerald-600 animate-spin mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Preparing checkout</h2>
+          <p className="text-gray-500">Loading secure payment form...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const stripePromise = loadStripe(stripePublishableKey);
+  return (
+    <div className="max-w-2xl mx-auto py-8">
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Complete your payment</h2>
+        <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
+          <EmbeddedCheckout />
+        </EmbeddedCheckoutProvider>
+      </div>
+    </div>
+  );
+}
+
 interface WidgetProps {
   merchantSlug?: string;
 }
 
 export default function Widget({ merchantSlug }: WidgetProps) {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   const search = useSearch();
   const urlParams = new URLSearchParams(search);
@@ -82,6 +195,8 @@ export default function Widget({ merchantSlug }: WidgetProps) {
     { enabled: plansReady }
   );
   const plans = plansData?.plans;
+  const stripePublishableKey = plansData?.stripePublishableKey as string | undefined;
+  const createEmbeddedCheckout = trpc.subscription.createEmbeddedCheckoutSession.useMutation();
   const { data: enabledMarkets } = trpc.markets.listEnabled.useQuery();
   const memberSignup = trpc.member.signup.useMutation();
   const recordPrediction = trpc.intent.recordPrediction.useMutation();
@@ -107,21 +222,6 @@ export default function Widget({ merchantSlug }: WidgetProps) {
   const handleSelectPlan = (tier: "starter" | "pro" | "elite") => {
     setSelectedTier(tier);
     setStep("pay");
-    handleCheckout(tier);
-  };
-
-  const handleCheckout = (tier: "starter" | "pro" | "elite") => {
-    const params = `tier=${tier}&slug=${effectiveSlug}&anon=${anonToken}`;
-    const plansPath = `/plans?${params}`;
-    // In iframe: use full URL so we stay in the app (or break out if cross-origin)
-    // if (window.top !== window.self) {
-    //   const baseUrl = (import.meta.env.VITE_APP_URL as string) || window.location.origin;
-    //   window.location.href = `${baseUrl}${plansPath}`;
-    // } else {
-    //   // Same tab: use client-side navigation to avoid full reload / wrong redirect
-    //   navigate(plansPath);
-    // }
-    navigate(plansPath);
   };
 
   return (
@@ -267,15 +367,19 @@ export default function Widget({ merchantSlug }: WidgetProps) {
           </div>
         )}
 
-        {/* Step: Pay (redirecting to Stripe) */}
+        {/* Step: Pay (embedded Stripe checkout in widget) */}
         {step === "pay" && (
-          <div className="max-w-md mx-auto text-center py-16">
-            <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
-              <Loader2 className="w-12 h-12 text-emerald-600 animate-spin mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Redirecting to Checkout</h2>
-              <p className="text-gray-500">Taking you to Stripe to complete payment...</p>
-            </div>
-          </div>
+          <PayStep
+            selectedTier={selectedTier}
+            effectiveSlug={effectiveSlug}
+            embedToken={embedToken ?? undefined}
+            merchantSlug={merchantSlug}
+            isAuthenticated={isAuthenticated}
+            authLoading={authLoading}
+            stripePublishableKey={stripePublishableKey}
+            createEmbeddedCheckout={createEmbeddedCheckout}
+            navigate={navigate}
+          />
         )}
 
         {/* Step: Pick Prediction */}

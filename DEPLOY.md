@@ -41,6 +41,7 @@ The app uses **MySQL** (Drizzle + mysql2). Use one of:
    | `DATABASE_URL` | MySQL connection string | `mysql://user:pass@host/db?sslaccept=strict` |
    | `JWT_SECRET` | Session signing secret (min 32 chars) | long-random-string |
    | `STRIPE_SECRET_KEY` | Stripe secret key | `sk_live_...` or `sk_test_...` |
+   | `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key (for embedded checkout in widget) | `pk_test_...` or `pk_live_...` |
    | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | `whsec_...` |
    | `VITE_APP_ID` | OAuth app id (if using OAuth) | your-app-id |
    | `OAUTH_SERVER_URL` | OAuth API base URL (if using OAuth) | `https://auth.example.com` |

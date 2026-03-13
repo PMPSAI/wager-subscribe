@@ -33,6 +33,18 @@ export function getStripeForMode(mode: "test" | "live"): Stripe {
 }
 
 /**
+ * Returns the Stripe publishable key for the current mode (used for embedded checkout).
+ * Uses STRIPE_PUBLISHABLE_KEY, or mode-specific STRIPE_PUBLISHABLE_KEY_TEST / STRIPE_PUBLISHABLE_KEY_LIVE.
+ */
+export function getStripePublishableKey(): string | undefined {
+  const mode = getStripeMode();
+  if (mode === "test") {
+    return process.env.STRIPE_PUBLISHABLE_KEY_TEST ?? process.env.STRIPE_PUBLISHABLE_KEY;
+  }
+  return process.env.STRIPE_PUBLISHABLE_KEY_LIVE ?? process.env.STRIPE_PUBLISHABLE_KEY;
+}
+
+/**
  * Returns the Stripe client using the default configured key.
  * Throws if STRIPE_SECRET_KEY is not set.
  */
