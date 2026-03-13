@@ -106,6 +106,22 @@ export async function updateUserStripeCustomerId(userId: number, stripeCustomerI
   await db.update(users).set({ stripeCustomerId }).where(eq(users.id, userId));
 }
 
+/** Creates a temporary guest user for checkout-as-guest. Returns the new user id. */
+export async function createGuestUser(): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const { nanoid } = await import("nanoid");
+  const openId = `guest-${nanoid(21)}`;
+  const [row] = await db.insert(users).values({
+    openId,
+    name: "Guest",
+    email: null,
+    role: "user",
+  }).returning({ id: users.id });
+  if (!row) throw new Error("Failed to create guest user");
+  return row.id;
+}
+
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 
 export async function upsertSubscription(sub: InsertSubscription) {

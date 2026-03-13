@@ -81,6 +81,7 @@ import {
   cleanExpiredEmbedTokens,
   revokeEmbedToken,
   createEmbedToken,
+  createGuestUser,
   getWebhookEventsFromDb,
 } from "./db";
 import { PLANS } from "./products";
@@ -287,6 +288,245 @@ export const appRouter = router({
         });
         await createTransaction({
           userId: ctx.user.id,
+          stripeSessionId: session.id,
+          planName,
+          planTier: plan.tier,
+          amountCents,
+          currency,
+          status: "pending",
+          incentiveSelected: 0,
+        });
+        return { clientSecret: session.client_secret! };
+      }),
+
+    /** Guest checkout (no auth). Creates a temporary user for the transaction. */
+    createEmbeddedCheckoutSessionGuest: publicProcedure
+      .input(
+        z.object({
+          planTier: z.enum(["starter", "pro", "elite"]),
+          merchantSlug: z.string().optional(),
+          returnUrlPath: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const plan = PLANS.find((p) => p.tier === input.planTier);
+        if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid plan" });
+        const origin = (ctx.req.headers.origin as string) || "http://localhost:3000";
+        const returnPath = input.returnUrlPath ?? "/widget";
+        const returnUrl = `${origin}${returnPath.includes("?") ? returnPath + "&" : returnPath + "?"}session_id={CHECKOUT_SESSION_ID}`;
+
+        let stripe: Stripe;
+        let priceId: string;
+        let planName = plan.name;
+        let amountCents = plan.amountCents;
+        const currency = plan.currency;
+
+        if (input.merchantSlug) {
+          const merchant = await getMerchantBySlug(input.merchantSlug);
+          const priceIds = merchant?.stripePlanPriceIds as Record<string, string> | null | undefined;
+          const merchantPriceId = priceIds?.[input.planTier];
+          if (merchant && merchant.stripeAccessToken && merchantPriceId) {
+            stripe = new Stripe(merchant.stripeAccessToken, { apiVersion: "2026-02-25.clover" });
+            priceId = merchantPriceId;
+            planName = `${merchant.name} - ${plan.name}`;
+          } else if (merchant) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Merchant has not configured Stripe plan prices for this tier.",
+            });
+          } else {
+            stripe = getStripe();
+            priceId = plan.priceId;
+          }
+        } else {
+          stripe = getStripe();
+          priceId = plan.priceId;
+        }
+
+        if (!priceId || typeof priceId !== "string" || !priceId.startsWith("price_")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid Stripe Price ID. Use a Stripe Price object ID (e.g. price_xxx).",
+          });
+        }
+
+        const guestUserId = await createGuestUser();
+        const session = await stripe.checkout.sessions.create({
+          mode: "subscription",
+          ui_mode: "embedded",
+          return_url: returnUrl,
+          line_items: [{ price: priceId, quantity: 1 }],
+          allow_promotion_codes: true,
+          client_reference_id: guestUserId.toString(),
+          metadata: {
+            user_id: guestUserId.toString(),
+            plan_tier: plan.tier,
+            plan_name: planName,
+          },
+        });
+        await createTransaction({
+          userId: guestUserId,
+          stripeSessionId: session.id,
+          planName,
+          planTier: plan.tier,
+          amountCents,
+          currency,
+          status: "pending",
+          incentiveSelected: 0,
+        });
+        return { clientSecret: session.client_secret! };
+      }),
+
+    /** Guest checkout: same as embedded but no auth required. Creates a temporary user. */
+    createEmbeddedCheckoutSessionGuest: publicProcedure
+      .input(
+        z.object({
+          planTier: z.enum(["starter", "pro", "elite"]),
+          merchantSlug: z.string().optional(),
+          returnUrlPath: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const plan = PLANS.find((p) => p.tier === input.planTier);
+        if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid plan" });
+        const origin = (ctx.req.headers.origin as string) || "http://localhost:3000";
+        const returnPath = input.returnUrlPath ?? "/widget";
+        const returnUrl = `${origin}${returnPath.includes("?") ? returnPath + "&" : returnPath + "?"}session_id={CHECKOUT_SESSION_ID}`;
+
+        let stripe: Stripe;
+        let priceId: string;
+        let planName = plan.name;
+        const amountCents = plan.amountCents;
+        const currency = plan.currency;
+
+        if (input.merchantSlug) {
+          const merchant = await getMerchantBySlug(input.merchantSlug);
+          const priceIds = merchant?.stripePlanPriceIds as Record<string, string> | null | undefined;
+          const merchantPriceId = priceIds?.[input.planTier];
+          if (merchant && merchant.stripeAccessToken && merchantPriceId) {
+            stripe = new Stripe(merchant.stripeAccessToken, { apiVersion: "2026-02-25.clover" });
+            priceId = merchantPriceId;
+            planName = `${merchant.name} - ${plan.name}`;
+          } else if (merchant) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Merchant has not configured Stripe plan prices for this tier.",
+            });
+          } else {
+            stripe = getStripe();
+            priceId = plan.priceId;
+          }
+        } else {
+          stripe = getStripe();
+          priceId = plan.priceId;
+        }
+
+        if (!priceId || typeof priceId !== "string" || !priceId.startsWith("price_")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid Stripe Price ID. Use a Stripe Price object ID (e.g. price_xxx).",
+          });
+        }
+
+        const guestUserId = await createGuestUser();
+
+        const session = await stripe.checkout.sessions.create({
+          mode: "subscription",
+          ui_mode: "embedded",
+          return_url: returnUrl,
+          line_items: [{ price: priceId, quantity: 1 }],
+          allow_promotion_codes: true,
+          client_reference_id: String(guestUserId),
+          metadata: {
+            user_id: String(guestUserId),
+            plan_tier: plan.tier,
+            plan_name: planName,
+          },
+        });
+        await createTransaction({
+          userId: guestUserId,
+          stripeSessionId: session.id,
+          planName,
+          planTier: plan.tier,
+          amountCents,
+          currency,
+          status: "pending",
+          incentiveSelected: 0,
+        });
+        return { clientSecret: session.client_secret! };
+      }),
+
+    /** Guest checkout — no auth required. Creates a temporary guest user for the transaction. */
+    createEmbeddedCheckoutSessionGuest: publicProcedure
+      .input(
+        z.object({
+          planTier: z.enum(["starter", "pro", "elite"]),
+          merchantSlug: z.string().optional(),
+          returnUrlPath: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const plan = PLANS.find((p) => p.tier === input.planTier);
+        if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid plan" });
+        const origin = (typeof globalThis !== "undefined" && (globalThis as any).req?.headers?.origin) || "http://localhost:3000";
+        const req = (globalThis as any).__req;
+        const originHeader = req?.headers?.origin;
+        const baseOrigin = originHeader || "http://localhost:3000";
+        const returnPath = input.returnUrlPath ?? "/widget";
+        const returnUrl = `${baseOrigin}${returnPath.includes("?") ? returnPath + "&" : returnPath + "?"}session_id={CHECKOUT_SESSION_ID}`;
+
+        let stripe: Stripe;
+        let priceId: string;
+        let planName = plan.name;
+        const amountCents = plan.amountCents;
+        const currency = plan.currency;
+
+        if (input.merchantSlug) {
+          const merchant = await getMerchantBySlug(input.merchantSlug);
+          const priceIds = merchant?.stripePlanPriceIds as Record<string, string> | null | undefined;
+          const merchantPriceId = priceIds?.[input.planTier];
+          if (merchant && merchant.stripeAccessToken && merchantPriceId) {
+            stripe = new Stripe(merchant.stripeAccessToken, { apiVersion: "2026-02-25.clover" });
+            priceId = merchantPriceId;
+            planName = `${merchant.name} - ${plan.name}`;
+          } else if (merchant) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Merchant has not configured Stripe plan prices for this tier.",
+            });
+          } else {
+            stripe = getStripe();
+            priceId = plan.priceId;
+          }
+        } else {
+          stripe = getStripe();
+          priceId = plan.priceId;
+        }
+
+        if (!priceId || typeof priceId !== "string" || !priceId.startsWith("price_")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid Stripe Price ID. Use a Stripe Price object ID (e.g. price_xxx).",
+          });
+        }
+
+        const guestUserId = await createGuestUser();
+
+        const session = await stripe.checkout.sessions.create({
+          mode: "subscription",
+          ui_mode: "embedded",
+          return_url: returnUrl,
+          line_items: [{ price: priceId, quantity: 1 }],
+          allow_promotion_codes: true,
+          client_reference_id: guestUserId.toString(),
+          metadata: {
+            user_id: guestUserId.toString(),
+            plan_tier: plan.tier,
+            plan_name: planName,
+          },
+        });
+        await createTransaction({
+          userId: guestUserId,
           stripeSessionId: session.id,
           planName,
           planTier: plan.tier,

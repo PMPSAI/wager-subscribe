@@ -18,7 +18,11 @@ interface AuthPageProps {
 
 export default function AuthPage({ defaultMode = "login", redirectTo }: AuthPageProps) {
   const [, navigate] = useLocation();
-  const [mode, setMode] = useState<"login" | "signup">(defaultMode);
+  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const modeFromUrl = searchParams.get("mode");
+  const [mode, setMode] = useState<"login" | "signup">(
+    modeFromUrl === "signup" ? "signup" : defaultMode
+  );
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);

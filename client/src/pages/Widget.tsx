@@ -51,6 +51,7 @@ interface PayStepProps {
   authLoading: boolean;
   stripePublishableKey?: string;
   createEmbeddedCheckout: ReturnType<typeof trpc.subscription.createEmbeddedCheckoutSession.useMutation>;
+  createEmbeddedCheckoutGuest: ReturnType<typeof trpc.subscription.createEmbeddedCheckoutSessionGuest.useMutation>;
   navigate: (path: string) => void;
 }
 
@@ -62,14 +63,21 @@ function PayStep({
   authLoading,
   stripePublishableKey,
   createEmbeddedCheckout,
+  createEmbeddedCheckoutGuest,
   navigate,
 }: PayStepProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [guestCheckoutStarted, setGuestCheckoutStarted] = useState(false);
 
+  const basePath = effectiveSlug !== "wager-demo" ? `/widget/${effectiveSlug}` : "/widget";
+  const returnUrlPath = embedToken ? `${basePath}?token=${embedToken}` : basePath;
+  const redirectWithTier = embedToken
+    ? `${basePath}?token=${embedToken}&tier=${selectedTier || "pro"}`
+    : `${basePath}?tier=${selectedTier || "pro"}`;
+
+  // Authenticated: create embedded session
   useEffect(() => {
     if (!selectedTier || !isAuthenticated || !stripePublishableKey || clientSecret || createEmbeddedCheckout.isPending) return;
-    const basePath = effectiveSlug !== "wager-demo" ? `/widget/${effectiveSlug}` : "/widget";
-    const returnUrlPath = embedToken ? `${basePath}?token=${embedToken}` : basePath;
     createEmbeddedCheckout.mutate(
       {
         planTier: selectedTier,
@@ -83,9 +91,31 @@ function PayStep({
         onError: (err: { message?: string }) => toast.error(err.message || "Failed to start checkout"),
       }
     );
-  }, [selectedTier, isAuthenticated, stripePublishableKey, effectiveSlug, embedToken]);
+  }, [selectedTier, isAuthenticated, stripePublishableKey, effectiveSlug, embedToken, returnUrlPath]);
 
-  if (authLoading) {
+  // Guest: create embedded session when user clicks Continue as guest
+  const handleGuestCheckout = () => {
+    if (!selectedTier || !stripePublishableKey) return;
+    setGuestCheckoutStarted(true);
+    createEmbeddedCheckoutGuest.mutate(
+      {
+        planTier: selectedTier,
+        merchantSlug: effectiveSlug === "wager-demo" ? undefined : effectiveSlug,
+        returnUrlPath,
+      },
+      {
+        onSuccess: (data: { clientSecret?: string }) => {
+          if (data?.clientSecret) setClientSecret(data.clientSecret);
+        },
+        onError: (err: { message?: string }) => {
+          toast.error(err.message || "Failed to start checkout");
+          setGuestCheckoutStarted(false);
+        },
+      }
+    );
+  };
+
+  if (authLoading && !guestCheckoutStarted) {
     return (
       <div className="max-w-md mx-auto text-center py-16">
         <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
@@ -96,20 +126,38 @@ function PayStep({
     );
   }
 
-  if (!isAuthenticated) {
-    const redirectPath = effectiveSlug !== "wager-demo" ? `/widget/${effectiveSlug}` : "/widget";
-    const authRedirect = `/auth?redirect=${encodeURIComponent(redirectPath)}`;
+  // Not authenticated: show Sign in / Sign up / Continue as guest
+  if (!isAuthenticated && !guestCheckoutStarted) {
+    const authRedirectLogin = `/auth?redirect=${encodeURIComponent(redirectWithTier)}`;
+    const authRedirectSignup = `/auth?redirect=${encodeURIComponent(redirectWithTier)}&mode=signup`;
     return (
       <div className="max-w-md mx-auto text-center py-16">
         <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Sign in to pay</h2>
-          <p className="text-gray-500 mb-6">You need to sign in to complete your subscription.</p>
-          <button
-            onClick={() => navigate(authRedirect)}
-            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl"
-          >
-            Sign in
-          </button>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Complete your payment</h2>
+          <p className="text-gray-500 mb-6">
+            Sign in to your account, create one, or continue as a guest.
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => navigate(authRedirectLogin)}
+              className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl"
+            >
+              Sign in
+            </button>
+            <button
+              onClick={() => navigate(authRedirectSignup)}
+              className="w-full px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-xl"
+            >
+              Create account
+            </button>
+            <button
+              onClick={handleGuestCheckout}
+              disabled={!stripePublishableKey}
+              className="w-full px-6 py-3 border-2 border-gray-200 hover:border-gray-300 text-gray-600 font-semibold rounded-xl"
+            >
+              Continue as guest
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -126,7 +174,8 @@ function PayStep({
     );
   }
 
-  if (createEmbeddedCheckout.isPending || !clientSecret) {
+  const checkoutPending = createEmbeddedCheckout.isPending || createEmbeddedCheckoutGuest.isPending;
+  if (checkoutPending || !clientSecret) {
     return (
       <div className="max-w-md mx-auto text-center py-16">
         <div className="bg-white rounded-2xl border border-gray-200 p-10 shadow-sm">
@@ -197,6 +246,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
   const plans = plansData?.plans;
   const stripePublishableKey = plansData?.stripePublishableKey as string | undefined;
   const createEmbeddedCheckout = trpc.subscription.createEmbeddedCheckoutSession.useMutation();
+  const createEmbeddedCheckoutGuest = trpc.subscription.createEmbeddedCheckoutSessionGuest.useMutation();
   const { data: enabledMarkets } = trpc.markets.listEnabled.useQuery();
   const memberSignup = trpc.member.signup.useMutation();
   const recordPrediction = trpc.intent.recordPrediction.useMutation();
@@ -205,12 +255,30 @@ export default function Widget({ merchantSlug }: WidgetProps) {
     { enabled: !!memberToken }
   );
 
+  // Restore Pay step when returning from auth (tier in URL)
+  const tierFromUrl = urlParams.get("tier") as "starter" | "pro" | "elite" | null;
+  useEffect(() => {
+    if (tierFromUrl && ["starter", "pro", "elite"].includes(tierFromUrl)) {
+      setSelectedTier(tierFromUrl);
+      setStep("pay");
+    }
+  }, [tierFromUrl]);
+
   // If returning from Stripe checkout, skip to prediction
   useEffect(() => {
     if (sessionId) {
       setStep("prediction");
     }
   }, [sessionId]);
+
+  // Restore Pay step from URL when returning from auth (redirect preserves tier)
+  useEffect(() => {
+    const tierFromUrl = urlParams.get("tier");
+    if (tierFromUrl && ["starter", "pro", "elite"].includes(tierFromUrl)) {
+      setSelectedTier(tierFromUrl as "starter" | "pro" | "elite");
+      setStep("pay");
+    }
+  }, [search]);
 
   // If member already has a token, skip auth
   useEffect(() => {
@@ -378,6 +446,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
             authLoading={authLoading}
             stripePublishableKey={stripePublishableKey}
             createEmbeddedCheckout={createEmbeddedCheckout}
+            createEmbeddedCheckoutGuest={createEmbeddedCheckoutGuest}
             navigate={navigate}
           />
         )}
