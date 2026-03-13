@@ -49,7 +49,15 @@ export default function AdminPortal() {
     setSyncingPolymarket(true);
     try {
       const result = await syncPolymarket.mutateAsync({ limit: 30 });
-      toast.success(`Synced ${result.synced} Polymarket markets`);
+      if (result.synced > 0) {
+        toast.success(`Synced ${result.synced} Polymarket markets`);
+      } else if (result.error) {
+        toast.error(`Sync failed: ${result.error}`);
+      } else if (result.total === 0) {
+        toast.warning("Polymarket API returned no markets");
+      } else {
+        toast.error("0 markets synced. Ensure DATABASE_URL is set and run: pnpm db:push");
+      }
       utils.admin.overview.invalidate();
     } catch (e: any) {
       toast.error(e.message || "Sync failed");
@@ -62,7 +70,15 @@ export default function AdminPortal() {
     setSyncingKalshi(true);
     try {
       const result = await syncKalshi.mutateAsync({ limit: 30 });
-      toast.success(`Synced ${result.synced} Kalshi markets`);
+      if (result.synced > 0) {
+        toast.success(`Synced ${result.synced} Kalshi markets`);
+      } else if (result.error) {
+        toast.error(`Sync failed: ${result.error}`);
+      } else if (result.total === 0) {
+        toast.warning("Kalshi API returned no markets (API key may be required)");
+      } else {
+        toast.error("0 markets synced. Ensure DATABASE_URL is set and run: pnpm db:push");
+      }
       utils.admin.overview.invalidate();
     } catch (e: any) {
       toast.error(e.message || "Sync failed");

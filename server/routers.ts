@@ -83,7 +83,6 @@ import {
   revokeEmbedToken,
   createEmbedToken,
   createGuestUser,
-  enableAllActiveMarkets,
   getWebhookEventsFromDb,
 } from "./db";
 import { PLANS } from "./products";
@@ -1301,6 +1300,7 @@ export const appRouter = router({
         requireAdmin(ctx.user.role);
         const markets = await fetchPolymarketMarkets(input.limit);
         let synced = 0;
+        const errors: string[] = [];
         for (const m of markets) {
           try {
             await upsertPredictionMarket({
@@ -1310,21 +1310,28 @@ export const appRouter = router({
               title: m.title,
               description: m.description,
               category: m.category,
-              yesPrice: m.yesPrice?.toFixed(4),
-              noPrice: m.noPrice?.toFixed(4),
-              volume: m.volume?.toFixed(2),
+              yesPrice: m.yesPrice != null ? m.yesPrice.toFixed(4) : undefined,
+              noPrice: m.noPrice != null ? m.noPrice.toFixed(4) : undefined,
+              volume: m.volume != null ? m.volume.toFixed(2) : undefined,
               resolutionDate: m.resolutionDate,
               resolvedAt: m.resolvedAt,
               resolvedOutcome: m.resolvedOutcome,
               isActive: m.isActive,
               isEnabled: true,
               lastFetchedAt: new Date(),
-              rawData: m.rawData,
+              rawData: m.rawData as Record<string, unknown> | undefined,
             });
             synced++;
-          } catch (e) { /* skip duplicates */ }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            errors.push(`${m.externalId}: ${msg}`);
+            if (errors.length <= 3) console.warn("[Markets] Polymarket upsert failed:", msg);
+          }
         }
-        return { synced, total: markets.length };
+        if (synced === 0 && markets.length > 0 && errors.length > 0) {
+          console.error("[Markets] All Polymarket upserts failed. First error:", errors[0]);
+        }
+        return { synced, total: markets.length, error: errors.length > 0 ? errors[0] : undefined };
       }),
 
     /** Admin: sync markets from Kalshi */
@@ -1335,6 +1342,7 @@ export const appRouter = router({
         const apiKey = input.apiKey || process.env.KALSHI_API_KEY;
         const markets = await fetchKalshiMarkets(apiKey, input.limit);
         let synced = 0;
+        const errors: string[] = [];
         for (const m of markets) {
           try {
             await upsertPredictionMarket({
@@ -1344,21 +1352,28 @@ export const appRouter = router({
               title: m.title,
               description: m.description,
               category: m.category,
-              yesPrice: m.yesPrice?.toFixed(4),
-              noPrice: m.noPrice?.toFixed(4),
-              volume: m.volume?.toFixed(2),
+              yesPrice: m.yesPrice != null ? m.yesPrice.toFixed(4) : undefined,
+              noPrice: m.noPrice != null ? m.noPrice.toFixed(4) : undefined,
+              volume: m.volume != null ? m.volume.toFixed(2) : undefined,
               resolutionDate: m.resolutionDate,
               resolvedAt: m.resolvedAt,
               resolvedOutcome: m.resolvedOutcome,
               isActive: m.isActive,
               isEnabled: true,
               lastFetchedAt: new Date(),
-              rawData: m.rawData,
+              rawData: m.rawData as Record<string, unknown> | undefined,
             });
             synced++;
-          } catch (e) { /* skip duplicates */ }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            errors.push(`${m.externalId}: ${msg}`);
+            if (errors.length <= 3) console.warn("[Markets] Kalshi upsert failed:", msg);
+          }
         }
-        return { synced, total: markets.length };
+        if (synced === 0 && markets.length > 0 && errors.length > 0) {
+          console.error("[Markets] All Kalshi upserts failed. First error:", errors[0]);
+        }
+        return { synced, total: markets.length, error: errors.length > 0 ? errors[0] : undefined };
       }),
 
     /** Admin: enable all active markets for the widget */

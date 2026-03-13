@@ -37,22 +37,38 @@ export async function fetchPolymarketMarkets(limit = 20): Promise<MarketData[]> 
     if (!res.ok) throw new Error(`Polymarket API error: ${res.status}`);
     const data = await res.json() as any[];
 
-    return data.map((m: any) => ({
+    return data.map((m: any) => {
+      const prices = (() => {
+        if (!m.outcomePrices) return null;
+        const raw = m.outcomePrices;
+        if (Array.isArray(raw)) return raw;
+        if (typeof raw === "string") {
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : null;
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      })();
+      return {
       source: "polymarket" as const,
       externalId: m.id ?? m.conditionId ?? String(m.slug),
       slug: m.slug,
       title: m.question ?? m.title ?? "Unknown",
       description: m.description,
       category: m.category ?? "market",
-      yesPrice: m.outcomePrices ? parseFloat(m.outcomePrices[0]) : undefined,
-      noPrice: m.outcomePrices ? parseFloat(m.outcomePrices[1]) : undefined,
+      yesPrice: prices?.[0] != null ? parseFloat(String(prices[0])) : undefined,
+      noPrice: prices?.[1] != null ? parseFloat(String(prices[1])) : undefined,
       volume: m.volume ? parseFloat(m.volume) : undefined,
       resolutionDate: m.endDate ? new Date(m.endDate) : undefined,
       resolvedAt: m.resolutionTime ? new Date(m.resolutionTime) : undefined,
       resolvedOutcome: m.resolution ?? undefined,
       isActive: !m.closed && !m.archived,
       rawData: m,
-    }));
+    };
+    });
   } catch (err) {
     console.warn("[Markets] Polymarket fetch failed:", err instanceof Error ? err.message : err);
     return [];

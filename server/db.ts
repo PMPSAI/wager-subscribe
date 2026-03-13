@@ -697,9 +697,8 @@ export async function getAllPredictionMarkets(opts?: { enabledOnly?: boolean; so
   if (opts?.enabledOnly) conditions.push(eq(predictionMarkets.isEnabled, true));
   if (opts?.source) conditions.push(eq(predictionMarkets.source, opts.source as any));
   const base = db.select().from(predictionMarkets).orderBy(desc(predictionMarkets.updatedAt)).limit(opts?.limit ?? 100);
-  if (conditions.length === 0) return base;
-  if (conditions.length === 1) return base.where(conditions[0]);
-  return base.where(and(...conditions));
+  const query = conditions.length === 0 ? base : conditions.length === 1 ? base.where(conditions[0]) : base.where(and(...conditions));
+  return await query;
 }
 
 export async function getPredictionMarketById(id: number) {
@@ -718,7 +717,7 @@ export async function updatePredictionMarket(id: number, data: Partial<InsertPre
 export async function getEnabledPredictionMarkets() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(predictionMarkets).where(and(eq(predictionMarkets.isEnabled, true), eq(predictionMarkets.isActive, true)));
+  return await db.select().from(predictionMarkets).where(and(eq(predictionMarkets.isEnabled, true), eq(predictionMarkets.isActive, true)));
 }
 
 /** Enable all active markets for the widget (bulk action for admins). Returns count updated. */

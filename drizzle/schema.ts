@@ -9,6 +9,7 @@ import {
   serial,
   text,
   timestamp,
+  unique,
   varchar,
 } from "drizzle-orm/pg-core";
 
@@ -374,7 +375,9 @@ export const predictionMarkets = pgTable("predictionMarkets", {
   rawData: json("rawData").$type<Record<string, unknown>>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (t) => ({
+  externalIdSource: unique().on(t.externalId, t.source),
+}));
 export type PredictionMarket = typeof predictionMarkets.$inferSelect;
 export type InsertPredictionMarket = typeof predictionMarkets.$inferInsert;
 
