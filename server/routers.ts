@@ -30,6 +30,7 @@ import {
   getAllSettlements,
   getAllUsers,
   getCampaignById,
+  enableAllActiveMarkets,
   getEnabledPredictionMarkets,
   getEmbedToken,
   getIncentiveByTransactionId,
@@ -82,6 +83,7 @@ import {
   revokeEmbedToken,
   createEmbedToken,
   createGuestUser,
+  enableAllActiveMarkets,
   getWebhookEventsFromDb,
 } from "./db";
 import { PLANS } from "./products";
@@ -1315,6 +1317,7 @@ export const appRouter = router({
               resolvedAt: m.resolvedAt,
               resolvedOutcome: m.resolvedOutcome,
               isActive: m.isActive,
+              isEnabled: true,
               lastFetchedAt: new Date(),
               rawData: m.rawData,
             });
@@ -1348,6 +1351,7 @@ export const appRouter = router({
               resolvedAt: m.resolvedAt,
               resolvedOutcome: m.resolvedOutcome,
               isActive: m.isActive,
+              isEnabled: true,
               lastFetchedAt: new Date(),
               rawData: m.rawData,
             });
@@ -1356,6 +1360,13 @@ export const appRouter = router({
         }
         return { synced, total: markets.length };
       }),
+
+    /** Admin: enable all active markets for the widget */
+    enableAll: protectedProcedure.mutation(async ({ ctx }) => {
+      requireAdmin(ctx.user.role);
+      const count = await enableAllActiveMarkets();
+      return { count };
+    }),
 
     /** Admin: toggle market enabled/disabled for widget */
     toggleEnabled: protectedProcedure

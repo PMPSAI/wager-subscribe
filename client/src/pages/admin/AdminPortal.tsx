@@ -11,11 +11,13 @@ export default function AdminPortal() {
   const [syncingPolymarket, setSyncingPolymarket] = useState(false);
   const [syncingKalshi, setSyncingKalshi] = useState(false);
   const [autoResolving, setAutoResolving] = useState(false);
+  const [enablingAll, setEnablingAll] = useState(false);
 
   const me = trpc.auth.me.useQuery();
   const overview = trpc.admin.overview.useQuery(undefined, { enabled: me.data?.role === "admin" });
   const syncPolymarket = trpc.markets.syncPolymarket.useMutation();
   const syncKalshi = trpc.markets.syncKalshi.useMutation();
+  const enableAll = trpc.markets.enableAll.useMutation();
   const toggleMarket = trpc.markets.toggleEnabled.useMutation();
   const autoResolve = trpc.markets.autoResolveIntents.useMutation();
   const utils = trpc.useUtils();
@@ -79,6 +81,19 @@ export default function AdminPortal() {
       toast.error(e.message || "Auto-resolve failed");
     } finally {
       setAutoResolving(false);
+    }
+  };
+
+  const handleEnableAll = async () => {
+    setEnablingAll(true);
+    try {
+      const result = await enableAll.mutateAsync();
+      toast.success(`Enabled ${result.count} markets for widget`);
+      utils.admin.overview.invalidate();
+    } catch (e: any) {
+      toast.error(e.message || "Enable all failed");
+    } finally {
+      setEnablingAll(false);
     }
   };
 
@@ -180,6 +195,13 @@ export default function AdminPortal() {
                     >
                       {autoResolving ? "Resolving..." : "Auto-Resolve Markets"}
                     </button>
+                    <button
+                      onClick={handleEnableAll}
+                      disabled={enablingAll}
+                      className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 rounded font-medium text-sm"
+                    >
+                      {enablingAll ? "Enabling..." : "Enable All Markets"}
+                    </button>
                     <a
                       href="/merchant/resolver"
                       className="px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded font-medium text-sm"
@@ -249,6 +271,13 @@ export default function AdminPortal() {
                   className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-sm font-medium"
                 >
                   {syncingKalshi ? "Syncing..." : "Sync Kalshi"}
+                </button>
+                <button
+                  onClick={handleEnableAll}
+                  disabled={enablingAll}
+                  className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 rounded text-sm font-medium"
+                >
+                  {enablingAll ? "Enabling..." : "Enable All"}
                 </button>
               </div>
             </div>

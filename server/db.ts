@@ -721,6 +721,18 @@ export async function getEnabledPredictionMarkets() {
   return db.select().from(predictionMarkets).where(and(eq(predictionMarkets.isEnabled, true), eq(predictionMarkets.isActive, true)));
 }
 
+/** Enable all active markets for the widget (bulk action for admins). Returns count updated. */
+export async function enableAllActiveMarkets(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db
+    .update(predictionMarkets)
+    .set({ isEnabled: true, updatedAt: new Date() })
+    .where(eq(predictionMarkets.isActive, true))
+    .returning({ id: predictionMarkets.id });
+  return result.length;
+}
+
 // ─── Member Accounts ──────────────────────────────────────────────────────────
 export async function createMemberAccount(data: InsertMemberAccount) {
   const db = await getDb();
