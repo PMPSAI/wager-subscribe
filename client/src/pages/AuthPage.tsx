@@ -39,7 +39,6 @@ export default function AuthPage({ defaultMode = "login", redirectTo }: AuthPage
     role: "user" as "user" | "admin",
   });
 
-  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const destination = redirectTo ?? searchParams.get("redirect") ?? "/";
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
