@@ -106,9 +106,9 @@ export default function Widget({ merchantSlug }: WidgetProps) {
       // Use explicit app URL when set (for embed: ensures redirect goes to wager-subscribe, not host page)
       const baseUrl = (import.meta.env.VITE_APP_URL as string) || window.location.origin;
       const url = `${baseUrl}/plans?tier=${tier}&slug=${effectiveSlug}&anon=${anonToken}`;
-      // Break out of iframe so user lands on full plans page
+      // Open in new tab when embedded (avoids cross-origin iframe navigation errors)
       if (window.top !== window.self) {
-        window.top!.location.href = url;
+        window.open(url, "_blank", "noopener,noreferrer");
       } else {
         window.location.href = url;
       }
