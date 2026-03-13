@@ -108,7 +108,7 @@ export default function Widget({ merchantSlug }: WidgetProps) {
       const url = `${baseUrl}/plans?tier=${tier}&slug=${effectiveSlug}&anon=${anonToken}`;
       // Open in new tab when embedded (avoids cross-origin iframe navigation errors)
       if (window.top !== window.self) {
-        window.open(url, "_blank", "noopener,noreferrer");
+        window.location.href = url;
       } else {
         window.location.href = url;
       }
