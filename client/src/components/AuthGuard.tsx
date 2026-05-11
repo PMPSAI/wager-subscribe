@@ -27,8 +27,8 @@ export default function AuthGuard({ children, role, redirectTo = "/auth" }: Auth
     }
     if (role === "admin_or_merchant") {
       if (user?.role !== "admin" && user?.role !== "user") navigate("/");
-    } else if (role && role !== "admin_or_merchant") {
-      if (user?.role !== role) navigate("/");
+    } else if (role && (role as string) !== "admin_or_merchant") {
+      if (user?.role !== (role as "admin" | "user")) navigate("/");
     }
   }, [loading, isAuthenticated, user, role, location, navigate, redirectTo]);
 

@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import path from "path";
+import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
@@ -87,7 +88,7 @@ export async function createApp(): Promise<Express> {
     // Static path: use __dirname/import.meta for reliability (process.cwd() can be wrong on Vercel).
     const __dirname = typeof import.meta.dirname !== "undefined"
       ? import.meta.dirname
-      : (typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url)));
+      : path.dirname(fileURLToPath(import.meta.url));
     const distPath = path.join(__dirname, "public");
     app.use(express.static(distPath, { index: false }));
     app.get("*", (_req, res, next) => {
