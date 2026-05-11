@@ -19,11 +19,11 @@ export async function setupVite(app: Express, server: Server) {
   const { default: viteConfig } = await import("../../vite.config");
 
   const serverOptions = {
+    ...((viteConfig as any).server ?? {}),
     middlewareMode: true,
     hmr: {
+      ...((viteConfig as any).server?.hmr ?? {}),
       server,
-      clientPort: 443,
-      protocol: "wss",
     },
     allowedHosts: true as const,
   };

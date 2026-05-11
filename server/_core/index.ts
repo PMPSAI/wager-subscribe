@@ -23,14 +23,22 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  const app = await createApp();
-  const server = createServer(app);
+  // Create the HTTP server first so it can be passed to createApp.
+  // This ensures Vite HMR WebSocket upgrades are attached to the same
+  // server instance that is actually listening on the port.
+  const { createServer: createHttpServer } = await import("http");
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  // Temporary placeholder so we can create the server before the app
+  const server = createHttpServer();
+  const app = await createApp(server);
+  // Attach the express app as the request handler
+  server.on("request", app);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

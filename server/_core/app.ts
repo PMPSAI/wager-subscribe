@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createServer } from "http";
+import { createServer, type Server } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { registerOAuthRoutes } from "./oauth";
@@ -17,10 +17,12 @@ import { registerAuthRoutes } from "../auth";
 
 /**
  * Creates the Express app (used by both standalone server and Vercel serverless).
+ * Optionally accepts an existing HTTP server so Vite HMR WebSocket upgrades
+ * are attached to the same server that is actually listening on the port.
  */
-export async function createApp(): Promise<Express> {
+export async function createApp(httpServer?: Server): Promise<Express> {
   const app = express();
-  const server = createServer(app);
+  const server = httpServer ?? createServer(app);
 
   app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
   registerStripeWebhook(app);
@@ -83,7 +85,9 @@ export async function createApp(): Promise<Express> {
   );
 
   if (process.env.NODE_ENV === "development") {
-    await setupVite(app, server);
+    // Use the provided httpServer (the real listening server) so Vite HMR
+    // WebSocket upgrades are handled on the correct server instance.
+    await setupVite(app, httpServer ?? server);
   } else {
     // Static path: use __dirname/import.meta for reliability (process.cwd() can be wrong on Vercel).
     const __dirname = typeof import.meta.dirname !== "undefined"
