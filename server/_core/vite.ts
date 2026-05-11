@@ -20,7 +20,11 @@ export async function setupVite(app: Express, server: Server) {
 
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server },
+    hmr: {
+      server,
+      clientPort: 443,
+      protocol: "wss",
+    },
     allowedHosts: true as const,
   };
 
