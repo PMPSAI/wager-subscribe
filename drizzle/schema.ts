@@ -47,6 +47,15 @@ export const incentiveStatusEnum = pgEnum("incentiveStatus", [
 export const predictionMarketSourceEnum = pgEnum("predictionMarketSource", [
   "polymarket", "kalshi", "manual",
 ]);
+export const merchantOnboardingStatusEnum = pgEnum("merchantOnboardingStatus", [
+  "pending_review", "approved", "rejected", "suspended",
+]);
+export const adminAuditActionEnum = pgEnum("adminAuditAction", [
+  "merchant_approved", "merchant_rejected", "merchant_suspended", "merchant_reactivated",
+  "user_role_changed", "user_password_reset", "user_suspended",
+  "compliance_note_added", "market_synced", "market_toggled",
+  "settings_changed",
+]);
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
@@ -87,6 +96,15 @@ export const merchants = pgTable("merchants", {
   stripePlanDisplay: json("stripePlanDisplay").$type<Record<string, number>>(),
   stripeMode: varchar("stripeMode", { length: 8 }).default("test").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
+  /** Onboarding / approval workflow status */
+  onboardingStatus: merchantOnboardingStatusEnum("onboardingStatus").default("pending_review").notNull(),
+  rejectionReason: text("rejectionReason"),
+  complianceNotes: text("complianceNotes"),
+  approvedAt: timestamp("approvedAt"),
+  approvedBy: integer("approvedBy"),
+  /** Business details for compliance review */
+  businessType: varchar("businessType", { length: 64 }),
+  website: varchar("website", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
@@ -398,3 +416,19 @@ export const memberAccounts = pgTable("memberAccounts", {
 });
 export type MemberAccount = typeof memberAccounts.$inferSelect;
 export type InsertMemberAccount = typeof memberAccounts.$inferInsert;
+
+// ─── Admin Audit Log ──────────────────────────────────────────────────────────
+export const adminAuditLog = pgTable("adminAuditLog", {
+  id: serial("id").primaryKey(),
+  adminUserId: integer("adminUserId").notNull(),
+  adminName: varchar("adminName", { length: 255 }),
+  action: adminAuditActionEnum("action").notNull(),
+  targetType: varchar("targetType", { length: 64 }), // "merchant" | "user" | "market" | "system"
+  targetId: integer("targetId"),
+  targetName: varchar("targetName", { length: 255 }),
+  notes: text("notes"),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
+export type InsertAdminAuditLog = typeof adminAuditLog.$inferInsert;

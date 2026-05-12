@@ -85,6 +85,9 @@ import {
   createEmbedToken,
   createGuestUser,
   getWebhookEventsFromDb,
+  createAuditLogEntry,
+  getAuditLog,
+  getMerchantsByOnboardingStatus,
 } from "./db";
 import { PLANS } from "./products";
 import { getConditionByKey, getConditionsForTier } from "./incentiveConditions";
@@ -1349,9 +1352,7 @@ export const appRouter = router({
       .input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin"]) }))
       .mutation(async ({ ctx, input }) => {
         requireAdmin(ctx.user.role);
-        const { updateUserProfile } = await import("./db");
-        await updateUserProfile(input.userId, {});
-        // Role update via direct DB call
+        const targetUser = await getUserById(input.userId);
         const { getDb } = await import("./db");
         const db = await getDb();
         if (db) {
@@ -1359,7 +1360,248 @@ export const appRouter = router({
           const { eq } = await import("drizzle-orm");
           await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
         }
+        await createAuditLogEntry({
+          adminUserId: ctx.user.id,
+          adminName: ctx.user.name ?? ctx.user.email ?? "Admin",
+          action: "user_role_changed",
+          targetType: "user",
+          targetId: input.userId,
+          targetName: targetUser?.name ?? targetUser?.email ?? String(input.userId),
+          notes: `Role changed to ${input.role}`,
+        });
         return { success: true };
+      }),
+
+    /** Admin: approve a merchant */
+    approveMerchant: protectedProcedure
+      .input(z.object({ merchantId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const merchant = await getMerchantById(input.merchantId);
+        if (!merchant) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant not found" });
+        await updateMerchant(input.merchantId, {
+          onboardingStatus: "approved",
+          isActive: true,
+          approvedAt: new Date(),
+          approvedBy: ctx.user.id,
+          rejectionReason: null,
+        } as any);
+        await createAuditLogEntry({
+          adminUserId: ctx.user.id,
+          adminName: ctx.user.name ?? ctx.user.email ?? "Admin",
+          action: "merchant_approved",
+          targetType: "merchant",
+          targetId: input.merchantId,
+          targetName: merchant.name,
+        });
+        return { success: true };
+      }),
+
+    /** Admin: reject a merchant */
+    rejectMerchant: protectedProcedure
+      .input(z.object({
+        merchantId: z.number().int().positive(),
+        reason: z.string().min(1).max(500),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const merchant = await getMerchantById(input.merchantId);
+        if (!merchant) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant not found" });
+        await updateMerchant(input.merchantId, {
+          onboardingStatus: "rejected",
+          isActive: false,
+          rejectionReason: input.reason,
+        } as any);
+        await createAuditLogEntry({
+          adminUserId: ctx.user.id,
+          adminName: ctx.user.name ?? ctx.user.email ?? "Admin",
+          action: "merchant_rejected",
+          targetType: "merchant",
+          targetId: input.merchantId,
+          targetName: merchant.name,
+          notes: input.reason,
+        });
+        return { success: true };
+      }),
+
+    /** Admin: suspend a merchant */
+    suspendMerchant: protectedProcedure
+      .input(z.object({
+        merchantId: z.number().int().positive(),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const merchant = await getMerchantById(input.merchantId);
+        if (!merchant) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant not found" });
+        await updateMerchant(input.merchantId, {
+          onboardingStatus: "suspended",
+          isActive: false,
+        } as any);
+        await createAuditLogEntry({
+          adminUserId: ctx.user.id,
+          adminName: ctx.user.name ?? ctx.user.email ?? "Admin",
+          action: "merchant_suspended",
+          targetType: "merchant",
+          targetId: input.merchantId,
+          targetName: merchant.name,
+          notes: input.reason,
+        });
+        return { success: true };
+      }),
+
+    /** Admin: reactivate a suspended/rejected merchant */
+    reactivateMerchant: protectedProcedure
+      .input(z.object({ merchantId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const merchant = await getMerchantById(input.merchantId);
+        if (!merchant) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant not found" });
+        await updateMerchant(input.merchantId, {
+          onboardingStatus: "approved",
+          isActive: true,
+          rejectionReason: null,
+        } as any);
+        await createAuditLogEntry({
+          adminUserId: ctx.user.id,
+          adminName: ctx.user.name ?? ctx.user.email ?? "Admin",
+          action: "merchant_reactivated",
+          targetType: "merchant",
+          targetId: input.merchantId,
+          targetName: merchant.name,
+        });
+        return { success: true };
+      }),
+
+    /** Admin: add compliance note to merchant */
+    addComplianceNote: protectedProcedure
+      .input(z.object({
+        merchantId: z.number().int().positive(),
+        note: z.string().min(1).max(2000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const merchant = await getMerchantById(input.merchantId);
+        if (!merchant) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant not found" });
+        const existing = (merchant as any).complianceNotes ?? "";
+        const timestamp = new Date().toISOString().slice(0, 10);
+        const adminName = ctx.user.name ?? ctx.user.email ?? "Admin";
+        const newNote = `[${timestamp} - ${adminName}]: ${input.note}`;
+        const combined = existing ? `${existing}\n\n${newNote}` : newNote;
+        await updateMerchant(input.merchantId, { complianceNotes: combined } as any);
+        await createAuditLogEntry({
+          adminUserId: ctx.user.id,
+          adminName,
+          action: "compliance_note_added",
+          targetType: "merchant",
+          targetId: input.merchantId,
+          targetName: merchant.name,
+          notes: input.note,
+        });
+        return { success: true };
+      }),
+
+    /** Admin: reset a user's password (generates temp password) */
+    resetUserPassword: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const targetUser = await getUserById(input.userId);
+        if (!targetUser) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        // Generate a secure temp password
+        const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+        const tempPassword = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+        const bcrypt = await import("bcryptjs");
+        const passwordHash = await bcrypt.default.hash(tempPassword, 12);
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (db) {
+          const { users } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, input.userId));
+        }
+        await createAuditLogEntry({
+          adminUserId: ctx.user.id,
+          adminName: ctx.user.name ?? ctx.user.email ?? "Admin",
+          action: "user_password_reset",
+          targetType: "user",
+          targetId: input.userId,
+          targetName: targetUser.name ?? targetUser.email ?? String(input.userId),
+        });
+        return { success: true, tempPassword };
+      }),
+
+    /** Admin: suspend a user account */
+    suspendUser: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot suspend yourself" });
+        const targetUser = await getUserById(input.userId);
+        if (!targetUser) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (db) {
+          const { users } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          // Set role to 'user' and clear password to prevent login
+          await db.update(users).set({ role: "user", updatedAt: new Date() }).where(eq(users.id, input.userId));
+        }
+        await createAuditLogEntry({
+          adminUserId: ctx.user.id,
+          adminName: ctx.user.name ?? ctx.user.email ?? "Admin",
+          action: "user_suspended",
+          targetType: "user",
+          targetId: input.userId,
+          targetName: targetUser.name ?? targetUser.email ?? String(input.userId),
+        });
+        return { success: true };
+      }),
+
+    /** Admin: get pending merchants */
+    getPendingMerchants: protectedProcedure.query(async ({ ctx }) => {
+      requireAdmin(ctx.user.role);
+      return getMerchantsByOnboardingStatus("pending_review");
+    }),
+
+    /** Admin: get compliance summary for all merchants */
+    getComplianceSummary: protectedProcedure.query(async ({ ctx }) => {
+      requireAdmin(ctx.user.role);
+      const allMerchants = await getAllMerchants();
+      return allMerchants.map((m: any) => {
+        const checks = {
+          stripeKeySet: !!m.stripePublishableKey,
+          webhookSet: !!m.stripeWebhookSecret,
+          priceIdsSet: !!(m.stripePlanPriceIds && Object.keys(m.stripePlanPriceIds ?? {}).length > 0),
+          isLiveMode: m.stripeMode === "live",
+          isApproved: m.onboardingStatus === "approved",
+        };
+        const score = Object.values(checks).filter(Boolean).length;
+        return { ...m, complianceChecks: checks, complianceScore: score };
+      });
+    }),
+
+    /** Admin: get audit log */
+    getAuditLog: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(500).default(100) }).optional())
+      .query(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        return getAuditLog(input?.limit ?? 100);
+      }),
+
+    /** Admin: get merchant detail with KPIs */
+    getMerchantDetail: protectedProcedure
+      .input(z.object({ merchantId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        requireAdmin(ctx.user.role);
+        const [merchant, kpis, merchantSubs] = await Promise.all([
+          getMerchantById(input.merchantId),
+          getMerchantKPIs().catch(() => null),
+          getAllMerchantSubscriptions(),
+        ]);
+        if (!merchant) throw new TRPCError({ code: "NOT_FOUND", message: "Merchant not found" });
+        const sub = merchantSubs.find((s: any) => s.merchantId === input.merchantId);
+        return { merchant, kpis, subscription: sub ?? null };
       }),
   }),
 

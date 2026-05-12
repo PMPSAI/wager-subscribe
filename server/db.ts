@@ -40,6 +40,9 @@ import {
   transactions,
   users,
   webhookEvents,
+  adminAuditLog,
+  InsertAdminAuditLog,
+  AdminAuditLog,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -839,4 +842,46 @@ export async function getAllUsers(limit = 100) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(users).orderBy(desc(users.createdAt)).limit(limit);
+}
+
+// ─── Admin Audit Log ──────────────────────────────────────────────────────────
+
+export async function createAuditLogEntry(data: {
+  adminUserId: number;
+  adminName?: string;
+  action: InsertAdminAuditLog["action"];
+  targetType?: string;
+  targetId?: number;
+  targetName?: string;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(adminAuditLog).values({
+      adminUserId: data.adminUserId,
+      adminName: data.adminName,
+      action: data.action,
+      targetType: data.targetType,
+      targetId: data.targetId,
+      targetName: data.targetName,
+      notes: data.notes,
+      metadata: data.metadata,
+    });
+  } catch (err) {
+    console.warn("[DB] Failed to write audit log:", err);
+  }
+}
+
+export async function getAuditLog(limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(adminAuditLog).orderBy(desc(adminAuditLog.createdAt)).limit(limit);
+}
+
+export async function getMerchantsByOnboardingStatus(status: "pending_review" | "approved" | "rejected" | "suspended") {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(merchants).where(eq(merchants.onboardingStatus, status)).orderBy(desc(merchants.createdAt));
 }

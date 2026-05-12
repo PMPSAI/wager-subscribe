@@ -21,7 +21,16 @@ import MerchantPredictions from "./pages/merchant/MerchantPredictions";
 import Terms from "./pages/Terms";
 import Widget from "./pages/Widget";
 import AuthPage from "./pages/AuthPage";
-import AdminPortal from "./pages/admin/AdminPortal";
+
+// ── New Admin Portal pages ───────────────────────────────────────────────────
+import AdminOverview from "./pages/admin/AdminOverview";
+import AdminMerchants from "./pages/admin/AdminMerchants";
+import AdminPendingMerchants from "./pages/admin/AdminPendingMerchants";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminCompliance from "./pages/admin/AdminCompliance";
+import AdminAuditLog from "./pages/admin/AdminAuditLog";
+import AdminMarkets from "./pages/admin/AdminMarkets";
+import AdminSettings from "./pages/admin/AdminSettings";
 
 function Router() {
   return (
@@ -131,11 +140,68 @@ function Router() {
       <Route path="/admin">
         {() => (
           <AuthGuard role="admin">
-            <AdminPortal />
+            <AdminOverview />
           </AuthGuard>
         )}
       </Route>
-      {/* Prospects moved to admin-only */}
+      <Route path="/admin/merchants">
+        {() => (
+          <AuthGuard role="admin">
+            <AdminMerchants />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/admin/merchants/pending">
+        {() => (
+          <AuthGuard role="admin">
+            <AdminPendingMerchants />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/admin/users">
+        {() => (
+          <AuthGuard role="admin">
+            <AdminUsers />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/admin/compliance">
+        {() => (
+          <AuthGuard role="admin">
+            <AdminCompliance />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/admin/audit">
+        {() => (
+          <AuthGuard role="admin">
+            <AdminAuditLog />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/admin/markets">
+        {() => (
+          <AuthGuard role="admin">
+            <AdminMarkets />
+          </AuthGuard>
+        )}
+      </Route>
+      <Route path="/admin/settings">
+        {() => (
+          <AuthGuard role="admin">
+            <AdminSettings />
+          </AuthGuard>
+        )}
+      </Route>
+      {/* Prospects — admin-only, accessible from admin sidebar */}
+      <Route path="/admin/prospects">
+        {() => (
+          <AuthGuard role="admin">
+            <MerchantProspects />
+          </AuthGuard>
+        )}
+      </Route>
+      {/* Legacy redirect: /merchant/prospects → /admin/prospects */}
       <Route path="/merchant/prospects">
         {() => (
           <AuthGuard role="admin">

@@ -132,3 +132,24 @@
 - [ ] Run TypeScript check and all tests
 - [ ] Save checkpoint
 - [ ] Deliver compliance audit report to user
+
+## Phase 9: Admin Portal Redesign
+
+- [x] DB schema: onboardingStatus, rejectionReason, complianceNotes, approvedAt fields on merchants
+- [x] DB schema: adminAuditLog table with action enum (merchant_approved, rejected, suspended, reactivated, user_role_changed, user_password_reset, user_suspended, compliance_note_added, market_synced, market_toggled, settings_changed)
+- [x] DB migration applied (0009_admin_portal_schema.sql)
+- [x] Backend: approveMerchant, rejectMerchant, suspendMerchant, reactivateMerchant procedures
+- [x] Backend: resetUserPassword (generates temp password), suspendUser, updateUserRole procedures
+- [x] Backend: addComplianceNote, getComplianceSummary procedures
+- [x] Backend: getAuditLog, getMerchantsByOnboardingStatus helpers
+- [x] AdminLayout sidebar component (violet accent, grouped nav, pending badge, user footer)
+- [x] AdminOverview page (KPI cards, needs-attention section, recent merchants/users)
+- [x] AdminMerchants page (table with search/filter, approve/reject/suspend/reactivate, detail dialog)
+- [x] AdminPendingMerchants page (dedicated approval queue with compliance checklist per merchant)
+- [x] AdminUsers page (table with role management, password reset, suspend, temp password dialog)
+- [x] AdminCompliance page (checklist table, compliance score bar, add notes per merchant)
+- [x] AdminAuditLog page (chronological log with action badges, search, type filter)
+- [x] AdminMarkets page (sync Polymarket/Kalshi, toggle enabled, auto-resolve)
+- [x] AdminSettings page (env config, platform stats, quick links)
+- [x] All admin routes wired in App.tsx (/admin, /admin/merchants, /admin/merchants/pending, /admin/users, /admin/compliance, /admin/audit, /admin/markets, /admin/settings, /admin/prospects)
+- [x] Prospects page moved to /admin/prospects (admin-only)
